@@ -1,0 +1,602 @@
+'use client';
+
+import { memo, useEffect, useRef, useState } from 'react';
+import { ReportModule, ModuleDefinition, ChartType } from '@/types';
+import { IconInfo, IconDragHandle } from '@/components/icons/FigmaIcons';
+import { MockProfile } from '@/lib/profile-data';
+import { ChartRenderer, PieChartRenderer } from './ChartRenderer';
+import { MetricCardModule } from './MetricCardModule';
+import { TableModule } from './TableModule';
+import { ListModule } from './ListModule';
+import { AudienceGrowthModule } from './AudienceGrowthModule';
+import { AudienceGrowthBarModule } from './AudienceGrowthBarModule';
+import { CategoricalBarModule, TimeSeriesBarModule } from './BarChartModule';
+import { AudienceGrowthLineModule, TimeSeriesLineModule } from './LineChartModule';
+import { TimeSeriesAreaModule } from './AreaChartModule';
+import { AudienceByGenderModule } from './AudienceByGenderModule';
+import { AudienceByCountryModule } from './AudienceByCountryModule';
+import { AudienceByCountryBarModule } from './AudienceByCountryBarModule';
+import { AudienceByCountryPieModule } from './AudienceByCountryPieModule';
+import { BubbleChartModule } from './BubbleChartModule';
+import { PublishingBehaviorModule } from './PublishingBehaviorModule';
+import { FollowersOnlineModule } from './FollowersOnlineModule';
+import {
+  InteractionsByDayModule,
+  InteractionsByDayLineModule,
+  InteractionsByDayAreaModule,
+} from './InteractionsByDayModule';
+import { SummaryCardModule } from './SummaryCardModule';
+import { ModuleActions } from './ModuleActions';
+import { cn } from '@/lib/utils';
+import {
+  MOCK_CHART_DATA,
+  MOCK_METRICS,
+  MOCK_TABLE_DATA,
+  MOCK_TABLE_COLUMNS,
+  MOCK_LIST_ITEMS,
+  MOCK_LIST_DATA,
+  MOCK_PIE_DATA,
+  MOCK_BUBBLE_DATA,
+  MOCK_INTERACTIONS_BY_DAY,
+  MOCK_BEST_ENGAGING_DAY_ROWS,
+  MOCK_BEST_PERFORMING_DAY_ROWS,
+  CHART_COLORS,
+} from '@/lib/mock-data';
+
+interface ModuleCardProps {
+  module: ReportModule;
+  definition: ModuleDefinition;
+  isEditMode: boolean;
+  /**
+   * True while this specific module is being resized via the corner
+   * grip. The parent (`ReportCanvas`) flips this on at `onResizeStart`
+   * and off at `onResizeStop`. We OR it into `showEditChrome` so the
+   * card's hover chrome doesn't flicker off if the cursor briefly
+   * slips outside the card's bounds as it grows / shrinks during a
+   * drag.
+   */
+  isResizing?: boolean;
+  onChartTypeChange: (moduleId: string, type: ChartType) => void;
+  onDuplicate: (moduleId: string) => void;
+  onDelete: (moduleId: string) => void;
+  height: number;
+  /**
+   * Globally-selected profiles. The card filters these by the
+   * definition's supported platforms and threads the result into any
+   * sub-module that renders a Networks indicator.
+   */
+  selectedProfiles?: MockProfile[];
+}
+
+function getModuleContent(
+  module: ReportModule,
+  def: ModuleDefinition,
+  contentHeight: number,
+  contentWidth: number,
+  profilesForModule: MockProfile[],
+) {
+  const { chartType, definitionId } = module;
+
+  // Special case: Audience Growth uses a 3-series overlapping area chart
+  // when in its default area mode (matches Figma frame 1026-38493).
+  if (definitionId === 'audience-growth' && chartType === 'area') {
+    return (
+      <AudienceGrowthModule
+        contentHeight={contentHeight}
+        contentWidth={contentWidth}
+        profiles={profilesForModule}
+      />
+    );
+  }
+
+  // Stacked-bar rendering of the same series when the module is
+  // switched to "bar". Shares axis/tooltip/legend chrome with the area
+  // rendering via imports from AudienceGrowthModule.
+  if (definitionId === 'audience-growth' && chartType === 'bar') {
+    return (
+      <AudienceGrowthBarModule
+        contentHeight={contentHeight}
+        contentWidth={contentWidth}
+        profiles={profilesForModule}
+      />
+    );
+  }
+
+  // 3-line rendering of the same series when the module is switched
+  // to "line". Same SERIES + DATA imports as the area / stacked-bar
+  // variants — the only difference is the geometry.
+  if (definitionId === 'audience-growth' && chartType === 'line') {
+    return (
+      <AudienceGrowthLineModule
+        contentHeight={contentHeight}
+        contentWidth={contentWidth}
+        profiles={profilesForModule}
+      />
+    );
+  }
+
+  // Audience by gender — bespoke donut with shadcn ChartContainer and
+  // per-wedge percentage labels (Figma 1232:350200). Only overrides the
+  // default PieChartRenderer when the chart type is still `pie`; if the
+  // user switches the module to bar, we fall through to ChartRenderer.
+  if (definitionId === 'audience-by-gender' && chartType === 'pie') {
+    return <AudienceByGenderModule profiles={profilesForModule} />;
+  }
+
+  // Audience by country — three bespoke renderers, one per chart type:
+  //   • list → ranked flag+country+percentage rows  (Figma 1233:350512)
+  //   • pie  → 10-slice donut with in-slice labels  (Figma 1314:191721)
+  //   • bar  → horizontal bars with in-bar labels   (Figma 1310:191707)
+  // All three share the same MOCK_PIE_DATA entry (or, for the list,
+  // its own AudienceByCountryModule data) so the percentages stay in
+  // lockstep across visualizations.
+  if (definitionId === 'audience-by-country' && chartType === 'list') {
+    return <AudienceByCountryModule profiles={profilesForModule} />;
+  }
+
+  if (definitionId === 'audience-by-country' && chartType === 'pie') {
+    return <AudienceByCountryPieModule profiles={profilesForModule} />;
+  }
+
+  if (definitionId === 'audience-by-country' && chartType === 'bar') {
+    return (
+      <AudienceByCountryBarModule
+        contentHeight={contentHeight}
+        contentWidth={contentWidth}
+        profiles={profilesForModule}
+      />
+    );
+  }
+
+  if (chartType === 'metric') {
+    // Fallback key is `followers` — the canonical Cross-network single-
+    // metric module in the rewritten catalog. Any metric module without
+    // its own mock entry renders that placeholder (e.g. dev-only IDs).
+    const metrics = MOCK_METRICS[definitionId] || MOCK_METRICS['followers'];
+    return (
+      <MetricCardModule
+        metrics={metrics}
+        profiles={profilesForModule}
+        contentWidth={contentWidth}
+      />
+    );
+  }
+
+  if (chartType === 'table') {
+    return <TableModule columns={MOCK_TABLE_COLUMNS} rows={MOCK_TABLE_DATA} />;
+  }
+
+  if (chartType === 'list') {
+    // Single-period summary cards — flat 4-row label/value tables, not
+    // ranked lists. Each has its own pre-formatted rows payload but
+    // shares the same renderer (`SummaryCardModule`):
+    //   • tiktok-best-engaging-day  → Figma 1291:123415
+    //   • tiktok-best-performing-day → Figma 1339:217275
+    if (definitionId === 'tiktok-best-engaging-day') {
+      return (
+        <SummaryCardModule
+          rows={MOCK_BEST_ENGAGING_DAY_ROWS}
+          contentWidth={contentWidth}
+          profiles={profilesForModule}
+        />
+      );
+    }
+    if (definitionId === 'tiktok-best-performing-day') {
+      return (
+        <SummaryCardModule
+          rows={MOCK_BEST_PERFORMING_DAY_ROWS}
+          contentWidth={contentWidth}
+          profiles={profilesForModule}
+        />
+      );
+    }
+    // Keyed lookup so list-type modules each render their own payload
+    // (e.g. top-posts → posts). Falls back to the legacy MOCK_LIST_ITEMS
+    // for unknown ids. (`tiktok-top-videos` was previously routed here
+    // but has been removed pending a redesign.)
+    const items = MOCK_LIST_DATA[definitionId] || MOCK_LIST_ITEMS;
+    return <ListModule items={items} />;
+  }
+
+  // Bubble chart — weekday × hour grid for Publishing Behaviour and
+  // Followers Online. Renders any module whose definitionId has a
+  // payload in MOCK_BUBBLE_DATA.
+  //   • Publishing Behaviour (1302:170169) — sparse posts, days on X,
+  //     hours on Y, three-band color (High / Mid / Low).
+  //   • Followers Online    (1326:217061) — full grid, days on Y,
+  //     hours on X, continuous magenta heatmap with gradient legend.
+  // Anything else falls through to the generic single-color renderer.
+  if (chartType === 'bubble') {
+    const bubbleData = MOCK_BUBBLE_DATA[definitionId] || [];
+    if (definitionId === 'tiktok-publishing-behaviour') {
+      return (
+        <PublishingBehaviorModule
+          data={bubbleData}
+          contentHeight={contentHeight}
+          contentWidth={contentWidth}
+          profiles={profilesForModule}
+        />
+      );
+    }
+    if (definitionId === 'tiktok-followers-online') {
+      return (
+        <FollowersOnlineModule
+          data={bubbleData}
+          contentHeight={contentHeight}
+          contentWidth={contentWidth}
+          profiles={profilesForModule}
+        />
+      );
+    }
+    return (
+      <BubbleChartModule
+        data={bubbleData}
+        contentHeight={contentHeight}
+        contentWidth={contentWidth}
+        profiles={profilesForModule}
+      />
+    );
+  }
+
+  if (chartType === 'pie') {
+    // Per the product catalog, donut is folded into pie — we always render
+    // the donut cutout here since it's visually cleaner at every size and
+    // matches the Figma demographics cards (1026:43083). Callers that
+    // need a solid pie can re-introduce a flag if/when a distinct
+    // chart type is added.
+    const pieData = (MOCK_PIE_DATA as Record<string, typeof MOCK_PIE_DATA['audience-demographics']>)[definitionId] || MOCK_PIE_DATA['audience-demographics'];
+    return (
+      <PieChartRenderer
+        data={pieData}
+        height={Math.max(contentHeight * 0.55, 100)}
+        donut
+      />
+    );
+  }
+
+  // Interactions by day — bespoke stacked bar (Figma 1290:101559).
+  // Three additive series (Shares / Comments / Likes) with in-bar
+  // value labels. Routed BEFORE the generic categorical/time-series
+  // bar fallback so the catalog's 'bar' chart type lands on the
+  // correct renderer for this definition.
+  if (chartType === 'bar' && definitionId === 'tiktok-interactions-by-day') {
+    return (
+      <InteractionsByDayModule
+        data={MOCK_INTERACTIONS_BY_DAY}
+        contentHeight={contentHeight}
+        contentWidth={contentWidth}
+        profiles={profilesForModule}
+      />
+    );
+  }
+
+  // Unified bar rendering for every module that lists 'bar' in
+  // `supportedChartTypes`. Two shapes:
+  //   • categorical (pie-shaped data in MOCK_PIE_DATA) → one bar per
+  //     category, colored from the entry — used when a pie/bar module
+  //     is switched to bar (audience-by-gender, instagram-audience,
+  //     tiktok-audience).
+  //   • time-series (date/value data in MOCK_CHART_DATA) → single
+  //     series bars over the date window (facebook-page-insights and
+  //     any future line/area/bar module without a bespoke renderer).
+  // Audience Growth's bar mode is already handled above by
+  // AudienceGrowthBarModule (3-series stacked) and takes precedence.
+  if (chartType === 'bar') {
+    const pieData = (MOCK_PIE_DATA as Record<string, typeof MOCK_PIE_DATA['audience-demographics']>)[definitionId];
+    if (pieData) {
+      return (
+        <CategoricalBarModule
+          data={pieData}
+          contentHeight={contentHeight}
+          contentWidth={contentWidth}
+          profiles={profilesForModule}
+        />
+      );
+    }
+    const seriesData = MOCK_CHART_DATA[definitionId] || MOCK_CHART_DATA['audience-growth'];
+    return (
+      <TimeSeriesBarModule
+        data={seriesData}
+        color="#0075DB"
+        label={def.name}
+        contentHeight={contentHeight}
+        contentWidth={contentWidth}
+        profiles={profilesForModule}
+      />
+    );
+  }
+
+  // Interactions by day — bespoke 3-line variant (28-day Shares /
+  // Comments / Likes). Routed BEFORE the generic single-series line
+  // fallback so the catalog's 'line' chart type lands on the bespoke
+  // multi-series renderer rather than the placeholder.
+  if (chartType === 'line' && definitionId === 'tiktok-interactions-by-day') {
+    return (
+      <InteractionsByDayLineModule
+        contentHeight={contentHeight}
+        contentWidth={contentWidth}
+        profiles={profilesForModule}
+      />
+    );
+  }
+
+  // Unified line rendering for any module that lists 'line' in
+  // `supportedChartTypes`. Audience Growth's line mode is handled
+  // above (3-series). Everything else falls through to the single-
+  // series TimeSeriesLineModule, which mirrors `TimeSeriesBarModule`'s
+  // shape (same axis chrome, same tooltip, same legend row).
+  if (chartType === 'line') {
+    const seriesData = MOCK_CHART_DATA[definitionId] || MOCK_CHART_DATA['audience-growth'];
+    return (
+      <TimeSeriesLineModule
+        data={seriesData}
+        color="#0075DB"
+        label={def.name}
+        contentHeight={contentHeight}
+        contentWidth={contentWidth}
+        profiles={profilesForModule}
+      />
+    );
+  }
+
+  // Interactions by day — bespoke 3-series area variant (translucent
+  // overlapping bands of Shares / Comments / Likes over the 28-day
+  // window). Routed BEFORE the generic single-series area fallback.
+  if (chartType === 'area' && definitionId === 'tiktok-interactions-by-day') {
+    return (
+      <InteractionsByDayAreaModule
+        contentHeight={contentHeight}
+        contentWidth={contentWidth}
+        profiles={profilesForModule}
+      />
+    );
+  }
+
+  // Unified area rendering for any module that lists 'area' in
+  // `supportedChartTypes`. Audience Growth's area mode is handled
+  // above (3-series). Everything else (e.g. tiktok-video-views-by-day)
+  // falls through to the single-series TimeSeriesAreaModule, which
+  // mirrors `TimeSeriesBarModule` / `TimeSeriesLineModule`'s shape
+  // — same axis chrome, same tooltip, same legend row — so flipping
+  // chart types produces zero footer jitter.
+  if (chartType === 'area') {
+    const seriesData = MOCK_CHART_DATA[definitionId] || MOCK_CHART_DATA['audience-growth'];
+    return (
+      <TimeSeriesAreaModule
+        data={seriesData}
+        color="#0075DB"
+        label={def.name}
+        contentHeight={contentHeight}
+        contentWidth={contentWidth}
+        profiles={profilesForModule}
+      />
+    );
+  }
+
+  // Final catch-all — any chart type we haven't routed above falls
+  // through to the legacy `ChartRenderer`. As of the standardization
+  // pass on time-series modules, no production catalog entry actually
+  // hits this branch (line/area/bar all have bespoke renderers above);
+  // it stays as a safety net for dev-time IDs and future chart types
+  // that haven't been wired yet.
+  const chartData = MOCK_CHART_DATA[definitionId] || MOCK_CHART_DATA['audience-growth'];
+  return (
+    <ChartRenderer
+      chartType={chartType}
+      data={chartData}
+      height={Math.max(contentHeight - 16, 80)}
+      color={CHART_COLORS.primary}
+      secondaryColor={CHART_COLORS.secondary}
+    />
+  );
+}
+
+function ModuleCardImpl({
+  module,
+  definition,
+  isEditMode,
+  isResizing = false,
+  onChartTypeChange,
+  onDuplicate,
+  onDelete,
+  height,
+  selectedProfiles = [],
+}: ModuleCardProps) {
+  const [isHovered, setIsHovered] = useState(false);
+  // True while any dropdown inside ModuleActions (chart-type picker
+  // or overflow menu) is open. We keep the chrome mounted in that
+  // state so moving the cursor from the card into the portaled
+  // dropdown surface doesn't unmount the dropdown mid-click.
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  // Figma 1168:213978 (hover) + 1168:214102 (default): every module card
+  // has a 20 px inset, with the title sitting at exactly y=20. The
+  // 32×32 action buttons are an ABSOLUTE overlay in the top-right —
+  // they sit on top of the header row rather than inside it, so
+  // mounting / unmounting them on hover is a no-op for layout. The
+  // title row therefore collapses to its natural 21 px line-height; a
+  // 24 px gap separates it from the content body.
+  //
+  // Non-content budget = 20 (top) + 14 (title, capped via leading-none)
+  //                    + 24 (gap) + 20 (bottom) = 78 px.
+  const TITLE_ROW_PX = 14;
+  const HEADER_GAP_PX = 24;
+  const PAD_PX = 20;
+  const contentHeight = Math.max(
+    height - (PAD_PX * 2 + TITLE_ROW_PX + HEADER_GAP_PX),
+    0,
+  );
+
+  // Track content-area pixel width via ResizeObserver. The Audience
+  // Growth chart (and future responsive modules) uses this to decide
+  // x-axis tick density — drop ticks when the module is narrow, show
+  // the full daily series when wide.
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentWidth, setContentWidth] = useState(0);
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContentWidth(entry.contentRect.width);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Track card-root pixel width. ModuleActions uses this to decide its
+  // own layout (normal vs compact) at the module level — NOT by
+  // viewport media query, so a single module that's been shrunk by the
+  // user still gets the compact actions while full-width siblings
+  // keep the segmented control. Observed from the card root (not the
+  // content ref) so the threshold check reads the actual outer box the
+  // actions have to fit inside.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [cardWidth, setCardWidth] = useState(0);
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setCardWidth(entry.contentRect.width);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Hover tracking lives on the grid-item (cardRef's parent), not the
+  // card itself. react-grid-layout injects the resize handle as a
+  // sibling of the card inside the grid-item, so a listener on the
+  // card would fire `mouseleave` the moment the cursor crossed into
+  // the SE-corner handle — dropping the hover chrome exactly when the
+  // user is reaching for it.
+  useEffect(() => {
+    const card = cardRef.current;
+    const gridItem = card?.parentElement;
+    if (!gridItem) return;
+    const enter = () => setIsHovered(true);
+    const leave = () => setIsHovered(false);
+    gridItem.addEventListener('mouseenter', enter);
+    gridItem.addEventListener('mouseleave', leave);
+    return () => {
+      gridItem.removeEventListener('mouseenter', enter);
+      gridItem.removeEventListener('mouseleave', leave);
+    };
+  }, []);
+
+  // Filter globally-selected profiles to the platforms this module's
+  // definition supports. An audience-growth module that supports
+  // TikTok/Instagram/Facebook/Twitter won't show a YouTube avatar in
+  // its Networks indicator.
+  const platformSet = new Set<string>(definition.platforms);
+  const profilesForModule = selectedProfiles.filter((p) => platformSet.has(p.platform));
+
+  // Chrome (drag handle, actions, hover border/shadow, resize grip) is
+  // driven by hover OR active resize — NOT by edit-mode alone. A
+  // module in edit mode but not being interacted with reads as a clean
+  // card. `isResizing` is latched by the parent ReportCanvas for the
+  // module being resized, so the chrome stays visible even when the
+  // cursor slips outside the card's (changing) bounds mid-drag.
+  const showEditChrome =
+    isEditMode && (isHovered || isResizing || actionsMenuOpen);
+
+  return (
+    <div
+      ref={cardRef}
+      className={cn(
+        'relative bg-white rounded-[8px] border h-full flex flex-col overflow-hidden p-[20px] transition-[border-color,box-shadow] duration-150',
+        showEditChrome
+          ? 'border-[#4D36FF] shadow-[0px_4px_8px_0px_rgba(32,30,36,0.1),0px_8px_16px_0px_rgba(32,30,36,0.1)]'
+          : 'border-[#E8E8E9]',
+      )}
+    >
+      {/* Drag handle — absolute overlay in the top-left padding gutter.
+          Figma 1182:232748 (DotsSixVertical). The 8×13 visible grip
+          sits inside the card's 20 px left padding: 6 px from the card
+          border, 6 px to the title's x=20 start (6 + 8 + 6 = 20), so
+          the title position is invariant. The 24×24 tile is offset to
+          x=−2 to land the grip at card x=6; the 2 px overhang is
+          clipped by the card's `overflow-hidden`. Vertical: with
+          `leading-none`, the title's 14 px line-box runs y=20→34, so
+          its visual center is y = 27. The grip's visual center inside
+          the 24-tile is at y=11.5, giving `top = 27 − 11.5 = 15.5 px`
+          to center the grip on the title. Color is DARK/dark--tint_30
+          (#626165). */}
+      {isEditMode && showEditChrome && (
+        <div
+          className="drag-handle absolute left-[-2px] flex items-center justify-center cursor-grab active:cursor-grabbing z-10"
+          style={{ top: 15.5 }}
+          aria-hidden="true"
+        >
+          <IconDragHandle size={24} color="#626165" />
+        </div>
+      )}
+
+      {/* Module actions — absolute overlay, right-aligned at card's
+          20 px inset. Absolute positioning is load-bearing: the 28×28
+          buttons must NOT participate in the flex flow, otherwise
+          mounting them on hover would push the title row taller and
+          change the padding-top the user perceives. With this overlay,
+          the title always sits at exactly y=20 regardless of hover
+          state, chart type, or screen size.
+          Vertical center on the title: title line-box is 14 px starting
+          at y=20 (center y=27). Action row is 28 px tall, so top =
+          27 − 14 = 13 px centers the row on the title. Row extends
+          y=13→41; content starts at y=58 (20 pt + 14 title + 24 gap),
+          clearance 17 px. */}
+      {showEditChrome && (
+        <div className="absolute top-[13px] right-[20px] z-10 flex items-center">
+          <ModuleActions
+            supportedChartTypes={definition.supportedChartTypes}
+            currentChartType={module.chartType}
+            onChartTypeChange={(type) => onChartTypeChange(module.id, type)}
+            onDuplicate={() => onDuplicate(module.id)}
+            onDelete={() => onDelete(module.id)}
+            cardWidth={cardWidth}
+            onMenuOpenChange={setActionsMenuOpen}
+          />
+        </div>
+      )}
+
+      {/* Title row — natural 21 px line-height, no compensating
+          `h-[52px]` / `items-center`. Title's top edge sits at
+          card-top + 20 (card padding) = exactly 20 px. Figma
+          1168:213980 — `gap-[4px] items-center`. */}
+      <div className="flex items-center gap-[4px] flex-shrink-0">
+        {/* Figma 1026:38625 — IBM Plex Sans Regular 14 / 21, DARK/dark--tint_10 (#363439). */}
+        <h3 className="text-[14px] font-normal text-[#363439] leading-none">
+          {definition.name}
+        </h3>
+        {/* Figma 1026:38626 — info icon, 16px tile. */}
+        <button
+          type="button"
+          className="flex-shrink-0 flex items-center justify-center"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <IconInfo size={16} color="#363439" />
+        </button>
+      </div>
+
+      {/* Content — 24 px gap from title to chart. Padding is owned by
+          the card root (`p-[20px]`), so this child only contributes
+          the header→body gap via `pt-[24px]`. */}
+      <div
+        ref={contentRef}
+        className="flex-1 pt-[24px] min-h-0 overflow-hidden"
+      >
+        {getModuleContent(module, definition, contentHeight, contentWidth, profilesForModule)}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Memoized so the card only re-renders when its own props actually change.
+ * Critical during live drag: when a sibling is shifted, only that sibling's
+ * `module` reference gets a new object; cards whose layout is unchanged
+ * skip the render, which keeps Recharts' ResponsiveContainer from
+ * re-measuring every frame (previously the cause of a max-update-depth
+ * loop in AudienceGrowthModule's YAxis).
+ */
+export const ModuleCard = memo(ModuleCardImpl);
