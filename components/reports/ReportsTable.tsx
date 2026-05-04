@@ -23,7 +23,7 @@
  *     not-sorted → desc → asc → not-sorted (third click clears)
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { MockReport, FILTER_OPTIONS } from '@/lib/reports-data';
 import { FilterDropdown } from './FilterDropdown';
 import { ReportRow, REPORT_ROW_COLUMNS } from './ReportRow';
@@ -64,7 +64,14 @@ interface ReportsTableProps {
   initialFilters?: ReadonlySet<string>;
 }
 
-const PAGE_SIZE = 10;
+/**
+ * Allowed values for the "N per page" pagination selector — Figma spec
+ * defaults to 10. Hoisted out of state so the dropdown options and the
+ * default value share a single source of truth.
+ */
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
+type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
+const DEFAULT_PAGE_SIZE: PageSize = 10;
 
 export type SortKey = 'name' | 'modifiedAt' | 'modules';
 export type SortDir = 'asc' | 'desc';
@@ -108,6 +115,17 @@ export function ReportsTable({
   // change so the user never lands on an empty page after narrowing
   // results.
   const [page, setPage] = useState(1);
+  // Page-size state — drives both the row slice math and the
+  // pagination footer's "N per page" selector. Defaults to 10 (Figma
+  // spec) and the user can pick from PAGE_SIZE_OPTIONS via the
+  // dropdown trigger at the right edge of the pagination footer.
+  // Changing the size resets the page to 1 so we don't end up on a
+  // page index that no longer exists at the new size.
+  const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
+  const handlePageSizeChange = (next: PageSize) => {
+    setPageSize(next);
+    setPage(1);
+  };
   // Initial sort intentionally has NO active key — every column should
   // render with the neutral `IconSortUpDown` glyph until the user
   // clicks one. The mock data is already in modifiedAt-desc order at
@@ -170,7 +188,7 @@ export function ReportsTable({
   // ordering.  When pagination is OFF we render every row (no slice);
   // the math still runs but `pageRows === sorted`.
   const totalPages = paginationEnabled
-    ? Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
+    ? Math.max(1, Math.ceil(sorted.length / pageSize))
     : 1;
   // Guard against the user being on a page that no longer has rows
   // (e.g. they were on page 3, applied a filter that left only 1
@@ -178,7 +196,7 @@ export function ReportsTable({
   // useEffect below brings the state back in line for the next render.
   const safePage = Math.min(Math.max(1, page), totalPages);
   const pageRows = paginationEnabled
-    ? sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+    ? sorted.slice((safePage - 1) * pageSize, safePage * pageSize)
     : sorted;
 
   // Reset to page 1 whenever the result count changes — keeps the user
@@ -445,8 +463,9 @@ export function ReportsTable({
           page={safePage}
           totalPages={totalPages}
           totalItems={sorted.length}
-          pageSize={PAGE_SIZE}
+          pageSize={pageSize}
           onPageChange={setPage}
+          onPageSizeChange={handlePageSizeChange}
         />
       )}
 
@@ -486,23 +505,28 @@ export function ReportsTable({
 //   • Next pill      — "Next" + chevron_right, h-32 px-12 rounded-4,
 //     bg white, label #201E24 (or #908F92 when at last page).
 //   • Per-page menu  — bordered (1 px #F3F3F4) pill, h-32 px-13, label
-//     "10 per page" + chevron_down, bg white, label #201E24. Display
-//     only — the demo tool always pages 10 at a time.
+//     "{N} per page" + chevron_down, bg white, label #201E24. Click
+//     opens a small upward menu with the values from
+//     PAGE_SIZE_OPTIONS — the dropdown opens UPWARD because it lives
+//     at the page bottom and a downward menu would clip below the
+//     viewport edge.
 
 interface PaginationFooterProps {
   page: number;
   totalPages: number;
   totalItems: number;
-  pageSize: number;
+  pageSize: PageSize;
   onPageChange: (next: number) => void;
+  onPageSizeChange: (next: PageSize) => void;
 }
 
 function PaginationFooter({
   page,
   totalPages,
   totalItems: _totalItems,
-  pageSize: _pageSize,
+  pageSize,
   onPageChange,
+  onPageSizeChange,
 }: PaginationFooterProps) {
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
   return (
@@ -537,7 +561,7 @@ function PaginationFooter({
         trailingChevronDirection="right"
         label="Next"
       />
-      <PerPageSelector pageSize={_pageSize} />
+      <PerPageSelector pageSize={pageSize} onChange={onPageSizeChange} />
     </div>
   );
 }
@@ -612,25 +636,119 @@ function PageNumber({
   );
 }
 
-function PerPageSelector({ pageSize }: { pageSize: number }) {
-  // Display-only for now — the demo tool always pages at 10. Wired up
-  // as a button (no menu) so the button-shaped affordance still reads
-  // correctly even though it doesn't open anything yet.
+function PerPageSelector({
+  pageSize,
+  onChange,
+}: {
+  pageSize: PageSize;
+  onChange: (next: PageSize) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  // Close on outside click — the menu lives in the same DOM subtree as
+  // the trigger (no portal), so a single ancestor check resolves
+  // "inside the menu" vs "elsewhere on the page".
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (triggerRef.current && triggerRef.current.contains(target)) return;
+      const menu = document.querySelector('[data-per-page-menu]');
+      if (menu && menu.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  // Escape closes the menu — keeps keyboard users from being trapped.
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [open]);
+
   return (
-    <button
-      type="button"
-      className={cn(
-        'h-[32px] min-w-[32px] px-[13px] rounded-[4px] bg-white',
-        'inline-flex items-center justify-center gap-[8px]',
-        'border border-[#F3F3F4]',
-        'text-[12px] leading-[21px] font-medium text-[#201E24]',
-        'hover:bg-[#F3F3F4] transition-colors',
+    <div className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Items per page"
+        className={cn(
+          'h-[32px] min-w-[32px] px-[13px] rounded-[4px] bg-white',
+          'inline-flex items-center justify-center gap-[8px]',
+          'border border-[#F3F3F4]',
+          'text-[12px] leading-[21px] font-medium text-[#201E24]',
+          'hover:bg-[#F3F3F4] transition-colors',
+        )}
+      >
+        <span>{pageSize} per page</span>
+        <IconChevronDown size={16} color="#201E24" />
+      </button>
+
+      {open && (
+        // Menu opens UPWARD: the pagination footer sits at the bottom
+        // of the page, so a downward-opening menu would clip below the
+        // viewport.  `bottom: calc(100% + 4 px)` anchors the menu's
+        // bottom edge 4 px above the trigger's top edge — same 4 px
+        // gap that toolbar / link popovers elsewhere use.
+        <ul
+          data-per-page-menu
+          role="listbox"
+          aria-label="Items per page"
+          className={cn(
+            'absolute right-0 z-30 min-w-[120px]',
+            'bg-white border border-[#E8E8E9] rounded-[6px] py-1',
+          )}
+          style={{
+            bottom: 'calc(100% + 4px)',
+            boxShadow:
+              '0px 1px 8px 0px rgba(27,27,32,0.12), 0px 3px 4px 0px rgba(27,27,32,0.14)',
+            fontFamily: 'IBM Plex Sans, sans-serif',
+          }}
+        >
+          {PAGE_SIZE_OPTIONS.map((opt) => {
+            const active = opt === pageSize;
+            return (
+              <li key={opt}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  onClick={() => {
+                    onChange(opt);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    'w-full h-[32px] px-[12px] flex items-center justify-between gap-[8px]',
+                    'text-[12px] leading-[21px] font-medium transition-colors',
+                    active
+                      ? 'bg-[#EDEAFF] text-[#4D36FF]'
+                      : 'text-[#201E24] hover:bg-[#F3F3F4]',
+                  )}
+                >
+                  <span>{opt} per page</span>
+                  {active && (
+                    // Subtle confirmation dot for the currently-selected
+                    // option — keeps the row reading as "this is the
+                    // active value" without needing a separate check
+                    // glyph in the icon catalog.
+                    <span className="w-[6px] h-[6px] rounded-full bg-[#4D36FF]" />
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       )}
-      aria-label="Items per page"
-    >
-      <span>{pageSize} per page</span>
-      <IconChevronDown size={16} color="#201E24" />
-    </button>
+    </div>
   );
 }
 
