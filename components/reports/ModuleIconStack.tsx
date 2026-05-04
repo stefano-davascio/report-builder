@@ -74,8 +74,11 @@ export function ModuleIconStack({ networks }: ModuleIconStackProps) {
         </span>
       ))}
       {overflow > 0 && (
+        // Figma "Sans/14" token — 14 px (0.875 rem) / 21 px (1.3125 rem)
+        // line-height, Regular weight. Color stays at DARK/dark--tint_30
+        // (#626165) — same neutral as before, just at the smaller size.
         <span
-          className="text-[16px] leading-[24px] text-[#626165]"
+          className="text-[14px] leading-[21px] font-normal text-[#626165]"
           style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
         >
           +{overflow}
