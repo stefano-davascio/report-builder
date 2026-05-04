@@ -126,11 +126,25 @@ function FigmaIcon({
 }
 
 // Shared path attrs — every stroke icon in the Figma library uses these.
+//
+// `vectorEffect: 'non-scaling-stroke'` is the load-bearing line: Figma
+// specs every stroke icon at strokeWeight=1.5 *CSS pixels* regardless of
+// the tile size it ships in (the pagination chevron at 16-tile, for
+// example, has a `inset-[-9.38%_-18.75%]` stroke margin → 0.75 px on
+// each side → exactly 1.5 px stroke on screen). Our inner viewBox is
+// 7.5 × 13.5 (the path's native units) and the outer SVG is 24-unit, so
+// without `non-scaling-stroke` the 1.5-unit stroke would scale with the
+// viewBox and render at `1.5 × (size/24)` — only ~1.0 CSS px at size=16,
+// which read as visibly too thin in the pagination footer. With
+// `non-scaling-stroke`, the 1.5 is interpreted in CSS-px irrespective of
+// the viewBox scaling, so strokes render at a consistent 1.5 px at every
+// tile size and match Figma exactly.
 const S = {
   stroke: 'var(--stroke-0, #201E24)',
   strokeWidth: 1.5,
   strokeLinecap: 'round' as const,
   strokeLinejoin: 'round' as const,
+  vectorEffect: 'non-scaling-stroke' as const,
 };
 
 // ─── Navigation / UI ────────────────────────────────────────────────────────
