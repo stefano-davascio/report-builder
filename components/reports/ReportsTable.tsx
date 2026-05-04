@@ -36,6 +36,9 @@ import {
   IconSortUp,
   IconSortDown,
   IconPlusCircle,
+  IconSearch,
+  IconChevronDown,
+  IconChevronRight,
 } from '@/components/icons/SendiIcons';
 import { cn } from '@/lib/utils';
 
@@ -235,97 +238,118 @@ export function ReportsTable({
       className="flex flex-col"
       style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
     >
-      {/* Optional search input — only mounts when `searchEnabled` is
-          true (Scenario Switcher's "many" / "filtered" presets) AND
-          the source list is non-empty.  Searching an empty list is a
-          no-op surface and the design hides it on the empty state. */}
-      {searchEnabled && !isSourceEmpty && (
-        <div className="mb-[16px]">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search reports by name..."
-            aria-label="Search reports"
-            className={cn(
-              'w-full max-w-[360px] h-[36px] px-[12px] rounded-[6px]',
-              'border border-[#E8E8E9] bg-white',
-              'text-[14px] leading-[21px] text-[#201E24] placeholder:text-[#9C9B9D]',
-              'focus:outline-none focus:border-[#4D36FF]',
-            )}
-          />
-        </div>
-      )}
+      {/* ── Sticky chrome ────────────────────────────────────────────
+          Per Figma 1585:461063 (Many reports — after scroll), the
+          Reports section header AND the column-header strip both stick
+          to the viewport top (right below the TopAppBar) as the user
+          scrolls. We wrap them in a single sticky container so they
+          travel together — visually they stay flush.
 
-      {/* Header strip — "Reports" title + filter trigger sit INLINE
-          (Figma Frame 1295:124153 uses `flex gap-16 items-start`, not
-          a justify-between split). Selected chips spill to the right of
-          the filter button so the title + add-filter cluster stays
-          anchored at the leading edge. mb-24 = Frame 152's gap-24 to
-          the column-header strip. Title is Sans-Medium/16 (16/24). */}
-      <div className="flex items-start gap-[16px] mb-[24px] flex-wrap gap-y-[8px]">
-        <h2 className="text-[16px] leading-[24px] font-medium text-[#201E24]">
-          Reports
-        </h2>
+          Offset: `top-[88px]` matches the TopAppBar's combined height
+          (utility row 29 px + main nav row 59 px = 88 px). The layered
+          z-indexes (TopAppBar at z-30, this at z-20, body unset) keep
+          the rows below painting cleanly behind the chrome.
 
-        {/* Filter trigger — outlined "secondary" button per Figma node
-            1295:124155: h-32, px-13, 4-px radius, 1-px #201E24 @ 20 %
-            border, gap-7 between icon and label, `plus_circle` glyph
-            at 18 px (catalog `IconPlusCircle`, not `IconPlus`), 12/21
-            Medium #201E24 label.
-            Hidden when the source list is empty (Figma 1452:457037 —
-            empty state collapses all list-level chrome). */}
-        {!isSourceEmpty && (
-          <FilterDropdown
-            options={FILTER_OPTIONS}
-            selectedIds={selectedFilters}
-            onToggle={toggleFilter}
-            renderTrigger={(open, count) => (
-              <span
-                className={cn(
-                  'h-[32px] min-w-[32px] px-[13px] rounded-[4px]',
-                  'inline-flex items-center justify-center gap-[7px]',
-                  'border border-[rgba(32,30,36,0.2)]',
-                  'text-[12px] leading-[21px] font-medium text-[#201E24]',
-                  open ? 'bg-[#F3F3F4]' : 'bg-transparent',
-                  'hover:bg-[#F3F3F4] transition-colors',
+          `bg-white` is required — without an opaque fill, the rows
+          scrolling past would bleed through the sticky surface. */}
+      <div className="sticky top-[88px] z-20 bg-white">
+        {/* Header row — Figma 1597:463763 spec: 80 px tall, with
+            "Reports" title + Filter trigger anchored to the LEFT and
+            the search input flush to the RIGHT edge. Implemented as
+            `flex justify-between` so the right edge tracks the
+            container width regardless of the title cluster's width. */}
+        <div className="h-[80px] flex items-center justify-between gap-[16px] flex-wrap gap-y-[8px]">
+          {/* Left cluster — title + filter button + chip overflow.
+              Wrapped in its own flex so the gap between members stays
+              tight while `justify-between` on the parent pushes the
+              search to the opposite edge. */}
+          <div className="flex items-center gap-[16px] flex-wrap gap-y-[8px]">
+            <h2 className="text-[16px] leading-[24px] font-medium text-[#201E24]">
+              Reports
+            </h2>
+
+            {/* Filter trigger — Figma 1597:463766: h-32, px-13,
+                rounded-4, 1-px border #201E24 @ 20%, gap-7 between
+                icon and label, IconPlusCircle 16 px (Figma uses 16-tile
+                "Add filter icon"), 12/21 Medium #201E24 label.
+                Hidden when the source list is empty. */}
+            {!isSourceEmpty && (
+              <FilterDropdown
+                options={FILTER_OPTIONS}
+                selectedIds={selectedFilters}
+                onToggle={toggleFilter}
+                renderTrigger={(open, count) => (
+                  <span
+                    className={cn(
+                      'h-[32px] min-w-[32px] px-[13px] rounded-[4px]',
+                      'inline-flex items-center justify-center gap-[7px]',
+                      'border border-[rgba(32,30,36,0.2)]',
+                      'text-[12px] leading-[21px] font-medium text-[#201E24]',
+                      open ? 'bg-[#F3F3F4]' : 'bg-transparent',
+                      'hover:bg-[#F3F3F4] transition-colors',
+                    )}
+                  >
+                    <IconPlusCircle size={16} color="#201E24" />
+                    <span>Filter{count > 0 ? ` · ${count}` : ''}</span>
+                  </span>
                 )}
-              >
-                <IconPlusCircle size={18} color="#201E24" />
-                <span>Filter{count > 0 ? ` · ${count}` : ''}</span>
-              </span>
+              />
             )}
-          />
-        )}
 
-        {/* Filter chips — render to the right of the trigger. Active
-            selections still live in the same eye-line as the button
-            that produced them. (Source-empty already hides everything
-            via the early return above; chips can never be present when
-            there are no rows because there's no filter button to set
-            them — but we still gate to be safe.) */}
-        {!isSourceEmpty && chips.length > 0 && (
-          <div className="flex items-center gap-[8px] flex-wrap">
-            {chips.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => toggleFilter(c.id)}
-                className={cn(
-                  'h-[28px] pl-[10px] pr-[6px] rounded-full bg-[#EDEAFF]',
-                  'flex items-center gap-[6px] text-[13px] leading-[18px] font-medium text-[#4D36FF]',
-                  'cursor-pointer hover:bg-[#DDD5FF] transition-colors',
-                )}
-              >
-                <span>{c.label}</span>
-                <span className="w-[16px] h-[16px] rounded-full hover:bg-[rgba(77,54,255,0.15)] flex items-center justify-center">
-                  <IconClose size={12} color="#4D36FF" />
-                </span>
-              </button>
-            ))}
+            {/* Filter chips — same row as the trigger. */}
+            {!isSourceEmpty && chips.length > 0 && (
+              <div className="flex items-center gap-[8px] flex-wrap">
+                {chips.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => toggleFilter(c.id)}
+                    className={cn(
+                      'h-[28px] pl-[10px] pr-[6px] rounded-full bg-[#EDEAFF]',
+                      'flex items-center gap-[6px] text-[13px] leading-[18px] font-medium text-[#4D36FF]',
+                      'cursor-pointer hover:bg-[#DDD5FF] transition-colors',
+                    )}
+                  >
+                    <span>{c.label}</span>
+                    <span className="w-[16px] h-[16px] rounded-full hover:bg-[rgba(77,54,255,0.15)] flex items-center justify-center">
+                      <IconClose size={12} color="#4D36FF" />
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+
+          {/* Search bar — Figma 1583:461039 / 1597:462252:
+              bg DARK/dark--tint_95 (#F3F3F4), max-w 244, min-w 200,
+              padding 10/8, radius 6, gap-8 between leading 16-px
+              search icon + 12/24 Regular placeholder in #78767C. The
+              input itself is unstyled (bg transparent, no border, no
+              outline) so it inherits the wrapper's visual treatment.
+              Mounted only when `searchEnabled` and the source list
+              has rows — searching an empty list is a no-op surface. */}
+          {searchEnabled && !isSourceEmpty && (
+            <div
+              className={cn(
+                'flex items-center gap-[8px] bg-[#F3F3F4] rounded-[6px]',
+                'px-[10px] py-[8px] min-w-[200px] max-w-[244px] w-full',
+              )}
+            >
+              <IconSearch size={16} color="#78767C" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search reports..."
+                aria-label="Search reports"
+                className={cn(
+                  'flex-1 min-w-0 bg-transparent border-0 outline-none',
+                  'text-[12px] leading-[24px] text-[#201E24] placeholder:text-[#78767C]',
+                )}
+              />
+            </div>
+          )}
+        </div>
 
       {/* Column header row — sortable Name / Date / Modules columns +
           an EMPTY Networks frame + an empty Actions slot. Per Figma
@@ -338,39 +362,41 @@ export function ReportsTable({
           the trailing Actions cell off the right edge.
           Hidden when the source list is empty — Figma 1452:457037
           shows the empty state without column headers (no rows means
-          no columns to label). */}
-      {!isSourceEmpty && (
-        <div className="flex items-center h-[48px] border-b border-[#F3F3F4]">
-          <ColumnHeader
-            className={REPORT_ROW_COLUMNS.name}
-            label="Name"
-            sortKey="name"
-            state={sort}
-            onSort={(k) => setSort((s) => nextSortState(s, k))}
-          />
-          {/* "Modified" — was "Date modified", but the cell renders a
-              relative-time label (seconds / minutes / hours / days ago),
-              never an absolute date, so the shorter "Modified" describes
-              the column more accurately and matches the spec. */}
-          <ColumnHeader
-            className={REPORT_ROW_COLUMNS.date}
-            label="Modified"
-            sortKey="modifiedAt"
-            state={sort}
-            onSort={(k) => setSort((s) => nextSortState(s, k))}
-          />
-          <ColumnHeader
-            className={REPORT_ROW_COLUMNS.modules}
-            label="Modules"
-            sortKey="modules"
-            state={sort}
-            onSort={(k) => setSort((s) => nextSortState(s, k))}
-          />
-          {/* Networks: header frame is intentionally empty in Figma. */}
-          <div className={REPORT_ROW_COLUMNS.networks} aria-hidden="true" />
-          <div className={REPORT_ROW_COLUMNS.actions} aria-hidden="true" />
-        </div>
-      )}
+          no columns to label).
+          Inside the sticky wrapper above so the strip travels with
+          the section header as the user scrolls (Figma 1585:461063). */}
+        {!isSourceEmpty && (
+          <div className="flex items-center h-[48px] border-b border-[#F3F3F4]">
+            <ColumnHeader
+              className={REPORT_ROW_COLUMNS.name}
+              label="Name"
+              sortKey="name"
+              state={sort}
+              onSort={(k) => setSort((s) => nextSortState(s, k))}
+            />
+            {/* "Date modified" — Figma 1597:463779.  Earlier code had
+                "Modified" for brevity; the design specs the longer
+                label so we restore it. */}
+            <ColumnHeader
+              className={REPORT_ROW_COLUMNS.date}
+              label="Date modified"
+              sortKey="modifiedAt"
+              state={sort}
+              onSort={(k) => setSort((s) => nextSortState(s, k))}
+            />
+            <ColumnHeader
+              className={REPORT_ROW_COLUMNS.modules}
+              label="Modules"
+              sortKey="modules"
+              state={sort}
+              onSort={(k) => setSort((s) => nextSortState(s, k))}
+            />
+            {/* Networks: header frame is intentionally empty in Figma. */}
+            <div className={REPORT_ROW_COLUMNS.networks} aria-hidden="true" />
+            <div className={REPORT_ROW_COLUMNS.actions} aria-hidden="true" />
+          </div>
+        )}
+      </div>{/* /sticky chrome wrapper */}
 
       {/* Body — `pageRows` instead of `sorted` so pagination's slice
           actually narrows the rendered set when enabled. When
@@ -442,6 +468,26 @@ export function ReportsTable({
 }
 
 // ── Pagination ─────────────────────────────────────────────────────────────
+//
+// Figma 1597:463997 ("Pagination Container") — horizontally-stacked
+// row sitting centered below the table:
+//
+//   ┌───────────┬───────────────────┬────────────┬──────────────┐
+//   │ Previous  │ 1   2   3   4 … │   Next →   │ 10 per page▼ │
+//   └───────────┴───────────────────┴────────────┴──────────────┘
+//
+// Pieces, left → right:
+//   • Previous pill  — chevron_left + "Previous", h-32 px-12 rounded-4,
+//     bg white, label color #908F92 when at page 1 (visually disabled
+//     even though the button itself is just inert), 12/21 IBM Plex Sans
+//     Medium.
+//   • Page numbers   — h-32 min-w-32 px-2 rounded-4. Active page gets
+//     bg #EDEAFF and label #4D36FF; inactive bg white, label #201E24.
+//   • Next pill      — "Next" + chevron_right, h-32 px-12 rounded-4,
+//     bg white, label #201E24 (or #908F92 when at last page).
+//   • Per-page menu  — bordered (1 px #F3F3F4) pill, h-32 px-13, label
+//     "10 per page" + chevron_down, bg white, label #201E24. Display
+//     only — the demo tool always pages 10 at a time.
 
 interface PaginationFooterProps {
   page: number;
@@ -451,92 +497,162 @@ interface PaginationFooterProps {
   onPageChange: (next: number) => void;
 }
 
-/**
- * Pagination footer — minimal controls scoped to the demo tool's "many"
- * preset. Renders the visible-row range ("11–20 of 25"), prev/next
- * buttons, and a numbered page strip with current-page highlight.
- * Visually quieter than the row body so it reads as scaffolding rather
- * than competing with the rows themselves.
- */
 function PaginationFooter({
   page,
   totalPages,
-  totalItems,
-  pageSize,
+  totalItems: _totalItems,
+  pageSize: _pageSize,
   onPageChange,
 }: PaginationFooterProps) {
-  const start = (page - 1) * pageSize + 1;
-  const end = Math.min(page * pageSize, totalItems);
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
   return (
     <div
-      className="flex items-center justify-between mt-[16px] pt-[16px] border-t border-[#F3F3F4] text-[13px] text-[#4C4B4F]"
+      // Centered horizontally below the body — Figma's
+      // "Pagination Container" sits at justify-center / mt-24 inside
+      // the 1114-px content column.
+      className="flex items-center justify-center gap-[6px] mt-[24px] mb-[40px]"
       style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
     >
-      <span>
-        {start}–{end} of {totalItems}
-      </span>
-      <div className="flex items-center gap-[4px]">
-        <PageButton
-          disabled={page === 1}
-          onClick={() => onPageChange(page - 1)}
-          ariaLabel="Previous page"
-        >
-          ‹
-        </PageButton>
+      <NavPill
+        disabled={page === 1}
+        onClick={() => onPageChange(page - 1)}
+        ariaLabel="Previous page"
+        leadingChevronDirection="left"
+        label="Previous"
+      />
+      <div className="flex items-center gap-[6px]">
         {pages.map((p) => (
-          <PageButton
+          <PageNumber
             key={p}
             active={p === page}
             onClick={() => onPageChange(p)}
-            ariaLabel={`Page ${p}`}
-          >
-            {p}
-          </PageButton>
+            label={p}
+          />
         ))}
-        <PageButton
-          disabled={page === totalPages}
-          onClick={() => onPageChange(page + 1)}
-          ariaLabel="Next page"
-        >
-          ›
-        </PageButton>
       </div>
+      <NavPill
+        disabled={page === totalPages}
+        onClick={() => onPageChange(page + 1)}
+        ariaLabel="Next page"
+        trailingChevronDirection="right"
+        label="Next"
+      />
+      <PerPageSelector pageSize={_pageSize} />
     </div>
   );
 }
 
-function PageButton({
-  children,
+// "Previous" / "Next" pills — share geometry; only the chevron side
+// and the disabled-when-at-edge label color differ.
+function NavPill({
+  label,
   onClick,
-  active,
   disabled,
   ariaLabel,
+  leadingChevronDirection,
+  trailingChevronDirection,
 }: {
-  children: React.ReactNode;
+  label: string;
   onClick: () => void;
-  active?: boolean;
   disabled?: boolean;
   ariaLabel: string;
+  leadingChevronDirection?: 'left' | 'right';
+  trailingChevronDirection?: 'left' | 'right';
 }) {
   return (
     <button
       type="button"
       onClick={disabled ? undefined : onClick}
       aria-label={ariaLabel}
-      aria-current={active ? 'page' : undefined}
       disabled={disabled}
       className={cn(
-        'min-w-[28px] h-[28px] px-[8px] rounded-[4px] flex items-center justify-center',
-        'text-[13px] leading-[16px] transition-colors',
-        active
-          ? 'bg-[#EDEAFF] text-[#4D36FF]'
-          : 'text-[#4C4B4F] hover:bg-[#F3F3F4]',
-        disabled && 'opacity-40 cursor-default hover:bg-transparent',
+        'h-[32px] min-w-[32px] px-[12px] rounded-[4px] bg-white',
+        'inline-flex items-center justify-center gap-[8px]',
+        'text-[12px] leading-[21px] font-medium transition-colors',
+        disabled ? 'text-[#908F92] cursor-default' : 'text-[#201E24] hover:bg-[#F3F3F4]',
       )}
     >
-      {children}
+      {leadingChevronDirection && (
+        <Chevron direction={leadingChevronDirection} disabled={disabled} />
+      )}
+      <span>{label}</span>
+      {trailingChevronDirection && (
+        <Chevron direction={trailingChevronDirection} disabled={disabled} />
+      )}
     </button>
+  );
+}
+
+function PageNumber({
+  label,
+  active,
+  onClick,
+}: {
+  label: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      aria-label={`Page ${label}`}
+      className={cn(
+        'h-[32px] min-w-[32px] px-[2px] rounded-[4px]',
+        'inline-flex items-center justify-center transition-colors',
+        'text-[12px] leading-[21px] font-medium',
+        active
+          ? 'bg-[#EDEAFF] text-[#4D36FF]'
+          : 'bg-white text-[#201E24] hover:bg-[#F3F3F4]',
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function PerPageSelector({ pageSize }: { pageSize: number }) {
+  // Display-only for now — the demo tool always pages at 10. Wired up
+  // as a button (no menu) so the button-shaped affordance still reads
+  // correctly even though it doesn't open anything yet.
+  return (
+    <button
+      type="button"
+      className={cn(
+        'h-[32px] min-w-[32px] px-[13px] rounded-[4px] bg-white',
+        'inline-flex items-center justify-center gap-[8px]',
+        'border border-[#F3F3F4]',
+        'text-[12px] leading-[21px] font-medium text-[#201E24]',
+        'hover:bg-[#F3F3F4] transition-colors',
+      )}
+      aria-label="Items per page"
+    >
+      <span>{pageSize} per page</span>
+      <IconChevronDown size={16} color="#201E24" />
+    </button>
+  );
+}
+
+function Chevron({
+  direction,
+  disabled,
+}: {
+  direction: 'left' | 'right';
+  disabled?: boolean;
+}) {
+  // Use the IconChevronRight glyph for both directions, rotated 180°
+  // when we need a left-facing chevron — keeps a single source of
+  // truth for the chevron path.
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        transform: direction === 'left' ? 'rotate(180deg)' : undefined,
+      }}
+    >
+      <IconChevronRight size={16} color={disabled ? '#908F92' : '#201E24'} />
+    </span>
   );
 }
 

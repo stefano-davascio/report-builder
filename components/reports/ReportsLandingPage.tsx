@@ -68,7 +68,17 @@ export function ReportsLandingPage({
       className="min-h-screen bg-white"
       style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
     >
-      <TopAppBar />
+      {/* TopAppBar pinned to viewport top — Figma 1585:461063
+          (Many reports — after scroll) shows it stuck above the
+          Reports section as the user scrolls. Wrapping at this level
+          (rather than baking sticky into TopAppBar itself) keeps the
+          component reusable in other contexts where stickiness might
+          not be wanted (settings pages, modals, etc.).
+          z-30 keeps the bar above the table's sticky chrome (z-20)
+          and any row-level overlays. */}
+      <div className="sticky top-0 z-30 bg-[#F1F0F8]">
+        <TopAppBar />
+      </div>
 
       {/* Content column — Figma anchors it at left:calc(16.67%+19px)
           which centers a 1114-px column inside the page. The 1114-px
