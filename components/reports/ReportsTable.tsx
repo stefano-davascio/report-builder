@@ -454,11 +454,15 @@ export function ReportsTable({
         </div>
       )}
 
-      {/* Pagination footer — only mounts when `paginationEnabled` AND
-          there's actually more than one page worth of results. A
-          single-page result set hides the footer entirely so the UI
-          doesn't surface controls that wouldn't move anywhere. */}
-      {paginationEnabled && totalPages > 1 && (
+      {/* Pagination footer — mounts whenever the table has rows and
+          the scenario asks for pagination chrome.  We deliberately do
+          NOT gate on `totalPages > 1` here: the per-page selector
+          inside the footer needs to stay reachable even on a single
+          page result so the user can bump the size DOWN (e.g. 25 → 10)
+          and re-engage paging.  The Previous / Next / page-number
+          pills hide internally when `totalPages <= 1` — see
+          `PaginationFooter` below. */}
+      {paginationEnabled && sorted.length > 0 && (
         <PaginationFooter
           page={safePage}
           totalPages={totalPages}
@@ -528,6 +532,12 @@ function PaginationFooter({
   onPageChange,
   onPageSizeChange,
 }: PaginationFooterProps) {
+  // Show the page navigation cluster (Previous + numbers + Next) only
+  // when there's somewhere to navigate to.  On a single-page result
+  // we still render the per-page selector so the user can shrink the
+  // size and re-engage paging (e.g. switch from 25 → 10 on a 25-row
+  // dataset and watch pagination kick back in).
+  const showPageNav = totalPages > 1;
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
   return (
     <div
@@ -537,30 +547,34 @@ function PaginationFooter({
       className="flex items-center justify-center gap-[6px] mt-[24px] mb-[40px]"
       style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
     >
-      <NavPill
-        disabled={page === 1}
-        onClick={() => onPageChange(page - 1)}
-        ariaLabel="Previous page"
-        leadingChevronDirection="left"
-        label="Previous"
-      />
-      <div className="flex items-center gap-[6px]">
-        {pages.map((p) => (
-          <PageNumber
-            key={p}
-            active={p === page}
-            onClick={() => onPageChange(p)}
-            label={p}
+      {showPageNav && (
+        <>
+          <NavPill
+            disabled={page === 1}
+            onClick={() => onPageChange(page - 1)}
+            ariaLabel="Previous page"
+            leadingChevronDirection="left"
+            label="Previous"
           />
-        ))}
-      </div>
-      <NavPill
-        disabled={page === totalPages}
-        onClick={() => onPageChange(page + 1)}
-        ariaLabel="Next page"
-        trailingChevronDirection="right"
-        label="Next"
-      />
+          <div className="flex items-center gap-[6px]">
+            {pages.map((p) => (
+              <PageNumber
+                key={p}
+                active={p === page}
+                onClick={() => onPageChange(p)}
+                label={p}
+              />
+            ))}
+          </div>
+          <NavPill
+            disabled={page === totalPages}
+            onClick={() => onPageChange(page + 1)}
+            ariaLabel="Next page"
+            trailingChevronDirection="right"
+            label="Next"
+          />
+        </>
+      )}
       <PerPageSelector pageSize={pageSize} onChange={onPageSizeChange} />
     </div>
   );
