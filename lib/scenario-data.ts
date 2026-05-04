@@ -45,52 +45,122 @@ export function templatesForScope(scope: TemplateScope): ReportTemplate[] {
 const FEW_REPORTS: MockReport[] = INITIAL_REPORTS;
 
 /**
- * "many" — 25 reports synthesised by cycling through the 3 production
- * seeds with renamed copies. Stable IDs (`scenario-many-N`) so list
- * keys don't collide with real reports the user creates while the
- * scenario is active. Names rotated through a small bank of plausible
- * report titles so the rows visually read as a real account, not 25
- * copies of the same row.
+ * "many" — 99 reports synthesised by cycling through the 3 production
+ * seeds with renamed copies.  The exact count is chosen so the
+ * pagination footer's per-page selector exercises every option:
+ *
+ *   • 10 per page  → 10 pages
+ *   • 25 per page  →  4 pages
+ *   • 50 per page  →  2 pages
+ *   • 100 per page →  1 page  (the only size that collapses to a
+ *                              single-page view — confirmation that
+ *                              the size selector still surfaces on a
+ *                              single-page result so the user can
+ *                              shrink back down without losing chrome)
+ *
+ * Stable IDs (`scenario-many-N`) so list keys don't collide with real
+ * reports the user creates while the scenario is active.  Names are
+ * generated from a few simple patterns (monthly-by-year, quarterly-
+ * by-year, plus a hand-curated list of plausible campaign / analytics
+ * titles) so the rows read as a real account rather than 99 copies of
+ * the same row, without us having to hand-author every entry.
  */
-const MANY_REPORT_NAMES = [
-  'January monthly report',
-  'February monthly report',
-  'March monthly report',
-  'April monthly report',
-  'May monthly report',
-  'June monthly report',
-  'Q1 2026 review',
-  'Q2 2026 review',
-  'Holiday campaign — Black Friday',
-  'Holiday campaign — Cyber Monday',
-  'Spring product launch',
-  'Summer product launch',
-  'Fall content push',
-  'Winter content push',
-  'Brand awareness — global',
-  'Brand awareness — US',
-  'Engagement deep-dive — Instagram',
-  'Engagement deep-dive — TikTok',
-  'Engagement deep-dive — LinkedIn',
-  'Audience growth — cross-platform',
-  'Audience growth — TikTok only',
-  'Audience growth — Instagram only',
-  'Top-posts roundup — weekly',
-  'Top-posts roundup — monthly',
-  'Influencer partnership snapshot',
-];
+function generateManyReportNames(): string[] {
+  const out: string[] = [];
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+  const years = ['2024', '2025', '2026'];
+
+  // Monthly reports — 12 × 3 = 36
+  for (const year of years) {
+    for (const month of months) {
+      out.push(`${month} ${year} monthly report`);
+    }
+  }
+
+  // Quarterly reviews — 4 × 3 = 12
+  for (const year of years) {
+    for (let q = 1; q <= 4; q++) {
+      out.push(`Q${q} ${year} review`);
+    }
+  }
+
+  // Hand-curated mix — 51 plausible analytics / campaign titles to
+  // bring the total to 99.  Stable order so the same list always
+  // renders the same way across renders / refreshes.
+  const others = [
+    'Holiday campaign — Black Friday',
+    'Holiday campaign — Cyber Monday',
+    'Spring product launch',
+    'Summer product launch',
+    'Fall content push',
+    'Winter content push',
+    'Brand awareness — global',
+    'Brand awareness — US',
+    'Brand awareness — UK',
+    'Engagement deep-dive — Instagram',
+    'Engagement deep-dive — TikTok',
+    'Engagement deep-dive — LinkedIn',
+    'Engagement deep-dive — Facebook',
+    'Engagement deep-dive — YouTube',
+    'Audience growth — cross-platform',
+    'Audience growth — TikTok only',
+    'Audience growth — Instagram only',
+    'Audience growth — Facebook only',
+    'Audience growth — LinkedIn only',
+    'Top-posts roundup — weekly',
+    'Top-posts roundup — monthly',
+    'Influencer partnership snapshot',
+    'Competitor analysis — Q1',
+    'Competitor analysis — Q2',
+    'Competitor analysis — Q3',
+    'Competitor analysis — Q4',
+    'Content performance — videos',
+    'Content performance — carousels',
+    'Content performance — stories',
+    'Content performance — reels',
+    'Customer engagement — email',
+    'Customer engagement — social',
+    'Crisis response — March',
+    'Crisis response — September',
+    'Year-end summary',
+    'Mid-year review',
+    'Onboarding metrics',
+    'Retention analysis',
+    'Conversion funnel',
+    'Hashtag performance',
+    'Geographic insights',
+    'Demographic breakdown',
+    'Sentiment analysis',
+    'Influencer ROI',
+    'Paid vs organic comparison',
+    'Cross-channel comparison',
+    'Mobile vs desktop',
+    'Time-of-day analysis',
+    'Day-of-week analysis',
+    'Posting frequency study',
+    'Engagement rate by post type',
+  ];
+  out.push(...others);
+
+  return out;
+}
+
+const MANY_REPORT_NAMES = generateManyReportNames();
 
 const MANY_REPORTS: MockReport[] = MANY_REPORT_NAMES.map((name, i) => {
   // Rotate through the 3 production seeds so each row has plausible
-  // module + network + profile data without us having to hand-author 25
-  // configurations.
+  // module + network + profile data without us having to hand-author
+  // 99 configurations.
   const seed = INITIAL_REPORTS[i % INITIAL_REPORTS.length];
   return {
     ...seed,
     id: `scenario-many-${i + 1}`,
     name,
     // Stagger modifiedAt so the table's "X hours/days ago" column
-    // doesn't read as 25 identical timestamps.
+    // doesn't read as 99 identical timestamps.
     modifiedAt: shiftIsoDays(seed.modifiedAt, i),
   };
 });
