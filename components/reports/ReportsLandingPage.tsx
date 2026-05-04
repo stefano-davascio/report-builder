@@ -65,17 +65,28 @@ export function ReportsLandingPage({
 }: ReportsLandingPageProps) {
   return (
     <div
-      className="min-h-screen bg-white"
+      // Landing page is its own SCROLL CONTAINER. The app's
+      // `<body>` is `flex flex-col overflow-hidden` (set in
+      // app/layout.tsx so the report builder can run a fixed-viewport
+      // shell with its own internal canvas scroll), which means the
+      // body itself never scrolls — pages that want vertical scroll
+      // must opt in by becoming their own scroller. `h-full
+      // overflow-y-auto` does exactly that: fills the body's
+      // viewport-sized flex slot and scrolls internally when the
+      // landing content (carousel + 25-row "many" scenario + footer)
+      // exceeds the viewport. `position: sticky` on descendants
+      // (TopAppBar wrapper, the Reports header chrome) takes effect
+      // relative to THIS scroll container.
+      className="h-full overflow-y-auto bg-white"
       style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
     >
-      {/* TopAppBar pinned to viewport top — Figma 1585:461063
-          (Many reports — after scroll) shows it stuck above the
-          Reports section as the user scrolls. Wrapping at this level
-          (rather than baking sticky into TopAppBar itself) keeps the
-          component reusable in other contexts where stickiness might
-          not be wanted (settings pages, modals, etc.).
-          z-30 keeps the bar above the table's sticky chrome (z-20)
-          and any row-level overlays. */}
+      {/* TopAppBar pinned to the scroll container's top — Figma
+          1585:461063 (Many reports — after scroll) shows it stuck
+          above the Reports section as the user scrolls. Wrapping at
+          this level (rather than baking sticky into TopAppBar itself)
+          keeps the component reusable in other contexts where
+          stickiness might not be wanted (settings pages, modals).
+          z-30 keeps the bar above the table's sticky chrome (z-20). */}
       <div className="sticky top-0 z-30 bg-[#F1F0F8]">
         <TopAppBar />
       </div>
