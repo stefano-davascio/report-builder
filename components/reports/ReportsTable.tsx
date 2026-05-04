@@ -340,18 +340,26 @@ export function ReportsTable({
           </div>
 
           {/* Search bar — Figma 1583:461039 / 1597:462252:
-              bg DARK/dark--tint_95 (#F3F3F4), max-w 244, min-w 200,
-              padding 10/8, radius 6, gap-8 between leading 16-px
-              search icon + 12/24 Regular placeholder in #78767C. The
-              input itself is unstyled (bg transparent, no border, no
-              outline) so it inherits the wrapper's visual treatment.
+              bg DARK/dark--tint_95 (#F3F3F4), 244-px fixed width
+              (max-w-244 min-w-200 in Figma is content-driven by the
+              inner `Search bar` row's `w-[224px]` + 10 px side padding
+              → always renders at exactly 244 px). Padding 10/8, radius
+              6, gap-8 between leading 16-px search icon + 12/24
+              Regular placeholder in #78767C. The input itself is
+              unstyled (bg transparent, no border, no outline) so it
+              inherits the wrapper's visual treatment.
               Mounted only when `searchEnabled` and the source list
-              has rows — searching an empty list is a no-op surface. */}
+              has rows — searching an empty list is a no-op surface.
+              IMPORTANT: this is `w-[244px]`, NOT `w-full max-w-244`.
+              Using `w-full` lets the flex parent stretch the search
+              all the way to the right edge of the 1114-px container,
+              which is roughly 5× the Figma width. The fixed 244 keeps
+              the search visually compact like the spec. */}
           {searchEnabled && !isSourceEmpty && (
             <div
               className={cn(
                 'flex items-center gap-[8px] bg-[#F3F3F4] rounded-[6px]',
-                'px-[10px] py-[8px] min-w-[200px] max-w-[244px] w-full',
+                'px-[10px] py-[8px] w-[244px]',
               )}
             >
               <IconSearch size={16} color="#78767C" />
