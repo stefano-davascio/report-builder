@@ -339,42 +339,16 @@ export function ReportsTable({
             )}
           </div>
 
-          {/* Search bar — Figma 1583:461039 / 1597:462252:
-              bg DARK/dark--tint_95 (#F3F3F4), 244-px fixed width
-              (max-w-244 min-w-200 in Figma is content-driven by the
-              inner `Search bar` row's `w-[224px]` + 10 px side padding
-              → always renders at exactly 244 px). Padding 10/8, radius
-              6, gap-8 between leading 16-px search icon + 12/24
-              Regular placeholder in #78767C. The input itself is
-              unstyled (bg transparent, no border, no outline) so it
-              inherits the wrapper's visual treatment.
-              Mounted only when `searchEnabled` and the source list
-              has rows — searching an empty list is a no-op surface.
-              IMPORTANT: this is `w-[244px]`, NOT `w-full max-w-244`.
-              Using `w-full` lets the flex parent stretch the search
-              all the way to the right edge of the 1114-px container,
-              which is roughly 5× the Figma width. The fixed 244 keeps
-              the search visually compact like the spec. */}
+          {/* Search bar — implemented per Figma 1583:461048 with all
+              four states (Default / Click / Typing / Typed). Hidden
+              when the source list is empty (searching nothing is a
+              no-op surface). See SearchBar definition below for the
+              full visual contract. */}
           {searchEnabled && !isSourceEmpty && (
-            <div
-              className={cn(
-                'flex items-center gap-[8px] bg-[#F3F3F4] rounded-[6px]',
-                'px-[10px] py-[8px] w-[244px]',
-              )}
-            >
-              <IconSearch size={16} color="#78767C" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search reports..."
-                aria-label="Search reports"
-                className={cn(
-                  'flex-1 min-w-0 bg-transparent border-0 outline-none',
-                  'text-[12px] leading-[24px] text-[#201E24] placeholder:text-[#78767C]',
-                )}
-              />
-            </div>
+            <SearchBar
+              value={searchQuery}
+              onChange={setSearchQuery}
+            />
           )}
         </div>
 
@@ -496,6 +470,149 @@ export function ReportsTable({
         }}
       />
     </section>
+  );
+}
+
+// ── Search bar ─────────────────────────────────────────────────────────────
+//
+// Figma 1583:461048 ("Search bar container") defines the four visual states:
+//
+//   ┌─────────────────────────────────────────────────────┐
+//   │ Default — bg #F3F3F4, no border, no shadow.         │ idle, empty
+//   │   [search]  Search reports…                         │
+//   ├─────────────────────────────────────────────────────┤
+//   │ Click   — bg #FFFFFF, 1-px #4D36FF border,          │ focused, empty
+//   │           2-px focus ring rgba(77,54,255,0.25).     │
+//   │   [search]  |                                       │
+//   ├─────────────────────────────────────────────────────┤
+//   │ Typing  — bg #FFFFFF, 1-px #4D36FF border,          │ focused, has text
+//   │           2-px focus ring; trailing 16-px close     │
+//   │           glyph clears the input.                   │
+//   │   [search]  some query|                       [×]   │
+//   ├─────────────────────────────────────────────────────┤
+//   │ Typed   — bg #F3F3F4 (back to default fill), no     │ unfocused, has text
+//   │           border, no shadow; trailing close glyph   │
+//   │           still present so the user can clear from  │
+//   │           an unfocused state.                       │
+//   │   [search]  some query                        [×]   │
+//   └─────────────────────────────────────────────────────┘
+//
+// Sizing:
+//   • Container is exactly 244 × 32 px (Figma metadata for every state
+//     symbol). Border lives INSIDE that 32 — `border` always renders so
+//     the focus transition doesn't shift content area by 2 px.
+//   • `px-[10px]` + `gap-[8px]` puts the leading icon flush 10 px from
+//     the left edge with 8 px clear space before the input.
+//   • Trailing close button replaces the rightmost slot when the input
+//     has a value, regardless of focus state — this is what
+//     Figma's `justify-between` flip in the inner Search bar accomplishes.
+//
+// Colors:
+//   • `#78767C` — neutral500, used for placeholder, leading search icon
+//      and the typed value (Figma keeps the typed text in the same
+//      neutral, NOT in #201E24 — verified directly in the design.)
+//   • `#4D36FF` — brand primary, used for the focused border and the
+//      translucent focus ring (`0 0 0 2px rgba(77,54,255,0.25)`).
+//
+// The native `:focus` outline is suppressed; we do focus styling on the
+// CONTAINER (so the input visual + its surrounding chrome animate as
+// one shape). `onFocus` / `onBlur` on the input drive the `focused`
+// flag because tracking via `:focus-within` would still leave the
+// container styled when the user clicks the (close) button — and
+// clicking the close should keep the input focused but doesn't re-fire
+// :focus-within consistently across browsers.
+interface SearchBarProps {
+  value: string;
+  onChange: (next: string) => void;
+}
+
+function SearchBar({ value, onChange }: SearchBarProps) {
+  const [focused, setFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const hasValue = value.length > 0;
+
+  return (
+    <div
+      // Click anywhere in the chrome focuses the input — without this,
+      // the 10-px side padding and the 8-px gap zones between icon and
+      // input become dead click-through regions, which feels broken on
+      // a 244-px target where those zones make up ~15 % of the surface.
+      onClick={() => inputRef.current?.focus()}
+      className={cn(
+        'flex items-center gap-[8px] w-[244px] h-[32px] px-[10px] rounded-[6px]',
+        // 1-px border ALWAYS — transparent at rest so the focused state
+        // doesn't add 2 px to the box width. Color toggles below.
+        'border',
+        // Click + Typing share the same focused chrome (white bg,
+        // purple border, focus ring). Default + Typed share the gray
+        // fill with no border / no ring.
+        focused
+          ? 'bg-white border-[#4D36FF]'
+          : 'bg-[#F3F3F4] border-transparent',
+        'transition-colors',
+      )}
+      style={
+        focused
+          ? { boxShadow: '0 0 0 2px rgba(77, 54, 255, 0.25)' }
+          : undefined
+      }
+    >
+      {/* Leading search icon — 16-px tile, neutral500 stroke. Stays
+          present in every state. */}
+      <IconSearch size={16} color="#78767C" />
+
+      {/* The input itself is visually invisible — `bg-transparent`,
+          no border, no outline. Container chrome carries the visuals.
+          Typography 12 px, line-height 21 (vertical centering inside
+          the 32-px container; Figma's 24-px leading would push the
+          glyph baseline above the icon, so we drop to 21 which is
+          already used by the Filter button label next door). */}
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        placeholder="Search reports..."
+        aria-label="Search reports"
+        className={cn(
+          'flex-1 min-w-0 bg-transparent border-0 outline-none',
+          'text-[12px] leading-[21px] font-normal',
+          // Typed value is rendered in the same neutral500 as the
+          // placeholder per Figma — even when unfocused, the typed
+          // text doesn't shift to the dark on-background color.
+          'text-[#78767C] placeholder:text-[#78767C]',
+        )}
+      />
+
+      {/* Trailing clear button — surfaces only when the input has a
+          value (Typing + Typed states). Clears the input and keeps
+          focus on the input so the user lands back in the Click state
+          rather than blurring out to Default. `mousedown` + preventDefault
+          stops the input from blurring during the click; `onClick` then
+          performs the clear. Without preventDefault, the input would
+          blur, shift to Typed (no value → Default), then re-focus —
+          a perceptible flicker. */}
+      {hasValue && (
+        <button
+          type="button"
+          aria-label="Clear search"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onChange('');
+            inputRef.current?.focus();
+          }}
+          className={cn(
+            'flex-shrink-0 inline-flex items-center justify-center',
+            'w-[16px] h-[16px] cursor-pointer',
+          )}
+        >
+          <IconClose size={16} color="#78767C" />
+        </button>
+      )}
+    </div>
   );
 }
 
