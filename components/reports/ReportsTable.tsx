@@ -39,6 +39,7 @@ import {
   IconSearch,
   IconChevronDown,
   IconChevronRight,
+  IconCheck,
 } from '@/components/icons/SendiIcons';
 import { cn } from '@/lib/utils';
 
@@ -510,10 +511,17 @@ export function ReportsTable({
 //     bg white, label #201E24 (or #908F92 when at last page).
 //   • Per-page menu  — bordered (1 px #E8E8E9) pill, h-32 px-13, label
 //     "{N} per page" + chevron_down, bg white, label #201E24. Click
-//     opens a small upward menu with the values from
-//     PAGE_SIZE_OPTIONS — the dropdown opens UPWARD because it lives
-//     at the page bottom and a downward menu would clip below the
-//     viewport edge.
+//     opens a small upward menu (Figma 1615:521008 — "Dropdown / Image")
+//     with the values from PAGE_SIZE_OPTIONS. The dropdown opens UPWARD
+//     because it lives at the page bottom and a downward menu would
+//     clip below the viewport edge.  Menu visual contract:
+//       • 162-px wide container (max 240), rounded-4, white bg
+//       • shadow: 1-px translucent ring + soft drop (NO border)
+//       • py-8 outer + px-8 inner gutter so option rows are inset
+//       • each row: gap-16 px-16 py-8, label 12/18 #201E24
+//       • selected row: bg #EDEAFF + trailing 16-px purple check_sm
+//         (#4D36FF). Label color stays #201E24 — the lavender bg and
+//         check do the work of indicating selection.
 
 interface PaginationFooterProps {
   page: number;
@@ -713,25 +721,38 @@ function PerPageSelector({
         // viewport.  `bottom: calc(100% + 4 px)` anchors the menu's
         // bottom edge 4 px above the trigger's top edge — same 4 px
         // gap that toolbar / link popovers elsewhere use.
+        //
+        // Figma 1615:521008 — "Dropdown / Image":
+        //   • container 162-px wide (min 162, max 240), rounded-4
+        //   • py-8 outer, ul has px-8 gutter so each row is INSET from the
+        //     container edge by 8 px on each side
+        //   • each row px-16 py-8 → 18-px line-height + 16-px label gap
+        //   • selected row: bg #EDEAFF rounded-4, label remains #201E24,
+        //     trailing 16-px purple check icon (#4D36FF)
+        //   • inactive: bg-white, label #201E24, no trailing icon
+        //   • shadow is a 1-px translucent ring (`0 0 0 1px rgba(32,30,36,0.1)`)
+        //     plus a soft drop (`0 12px 8px -4px rgba(32,30,36,0.15)`) — NO
+        //     border, the ring IS the border so it doesn't double up.
         <ul
           data-per-page-menu
           role="listbox"
           aria-label="Items per page"
           className={cn(
-            'absolute right-0 z-30 min-w-[120px]',
-            'bg-white border border-[#E8E8E9] rounded-[6px] py-1',
+            'absolute right-0 z-30 min-w-[162px] max-w-[240px]',
+            'bg-white rounded-[4px] overflow-hidden',
+            'flex flex-col items-start py-[8px] px-[8px]',
           )}
           style={{
             bottom: 'calc(100% + 4px)',
             boxShadow:
-              '0px 1px 8px 0px rgba(27,27,32,0.12), 0px 3px 4px 0px rgba(27,27,32,0.14)',
+              '0px 0px 0px 1px rgba(32,30,36,0.1), 0px 12px 8px -4px rgba(32,30,36,0.15)',
             fontFamily: 'IBM Plex Sans, sans-serif',
           }}
         >
           {PAGE_SIZE_OPTIONS.map((opt) => {
             const active = opt === pageSize;
             return (
-              <li key={opt}>
+              <li key={opt} className="w-full">
                 <button
                   type="button"
                   role="option"
@@ -741,20 +762,21 @@ function PerPageSelector({
                     setOpen(false);
                   }}
                   className={cn(
-                    'w-full h-[32px] px-[12px] flex items-center justify-between gap-[8px]',
-                    'text-[12px] leading-[21px] font-medium transition-colors',
-                    active
-                      ? 'bg-[#EDEAFF] text-[#4D36FF]'
-                      : 'text-[#201E24] hover:bg-[#F3F3F4]',
+                    'w-full flex items-center gap-[16px] px-[16px] py-[8px] rounded-[4px]',
+                    'text-[12px] leading-[18px] font-normal text-[#201E24]',
+                    'transition-colors',
+                    active ? 'bg-[#EDEAFF]' : 'bg-white hover:bg-[#F3F3F4]',
                   )}
                 >
-                  <span>{opt} per page</span>
+                  <span className="flex-1 min-w-0 text-left truncate">
+                    {opt} per page
+                  </span>
                   {active && (
-                    // Subtle confirmation dot for the currently-selected
-                    // option — keeps the row reading as "this is the
-                    // active value" without needing a separate check
-                    // glyph in the icon catalog.
-                    <span className="w-[6px] h-[6px] rounded-full bg-[#4D36FF]" />
+                    // 16-px purple check glyph — Figma uses the standard
+                    // check_sm vector (683:998) tinted with the brand
+                    // primary so the row reads as "selected" without
+                    // tinting the label itself.
+                    <IconCheck size={16} color="#4D36FF" />
                   )}
                 </button>
               </li>
