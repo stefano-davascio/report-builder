@@ -12,6 +12,7 @@
  * doesn't get cluttered with demo-only fixtures.
  */
 
+import type { Platform } from '@/types';
 import type { ReportListState, TemplateScope } from './scenario';
 import {
   INITIAL_REPORTS,
@@ -150,15 +151,56 @@ function generateManyReportNames(): string[] {
 
 const MANY_REPORT_NAMES = generateManyReportNames();
 
+/**
+ * Rotation of plausible network combinations for the "many" rows.
+ *
+ * The original implementation cycled the production INITIAL_REPORTS
+ * seeds, which collapsed every row to one of just three identical
+ * network arrays — every "many" report ended up looking either
+ * facebook-only, instagram-only, or the same 4-way cross-platform
+ * combo. The Networks column is one of the most visually scannable
+ * pieces of the table, so a real account would have considerably more
+ * variety: single-network reports, two-way pairs, three-way combos,
+ * and the occasional 4 / 5-way combo to exercise the "+N" overflow
+ * indicator.
+ *
+ * Order is intentionally varied — single → pair → triple → wide →
+ * single — so the table reads as natural diversity rather than a
+ * predictable pattern.  Index i % NETWORK_VARIANTS.length picks the
+ * combo for each row.
+ */
+const NETWORK_VARIANTS: Platform[][] = [
+  ['facebook'],
+  ['tiktok'],
+  ['instagram'],
+  ['linkedin'],
+  ['youtube'],
+  ['facebook', 'instagram'],
+  ['linkedin', 'facebook'],
+  ['instagram', 'tiktok'],
+  ['youtube', 'instagram'],
+  ['facebook', 'tiktok'],
+  ['linkedin', 'youtube'],
+  ['facebook', 'instagram', 'tiktok'],
+  ['linkedin', 'facebook', 'instagram'],
+  ['tiktok', 'youtube', 'instagram'],
+  ['facebook', 'instagram', 'tiktok', 'linkedin'],
+  ['facebook', 'instagram', 'tiktok', 'youtube'],
+  ['facebook', 'instagram', 'tiktok', 'linkedin', 'youtube'],
+];
+
 const MANY_REPORTS: MockReport[] = MANY_REPORT_NAMES.map((name, i) => {
-  // Rotate through the 3 production seeds so each row has plausible
-  // module + network + profile data without us having to hand-author
-  // 99 configurations.
+  // Rotate through the 3 production seeds for module + profile data
+  // (so each row has a plausible module count) but OVERRIDE the
+  // networks array with a varied combo so the Networks column
+  // reads as a real, mixed account.
   const seed = INITIAL_REPORTS[i % INITIAL_REPORTS.length];
+  const networks = NETWORK_VARIANTS[i % NETWORK_VARIANTS.length];
   return {
     ...seed,
     id: `scenario-many-${i + 1}`,
     name,
+    networks,
     // Stagger modifiedAt so the table's "X hours/days ago" column
     // doesn't read as 99 identical timestamps.
     modifiedAt: shiftIsoDays(seed.modifiedAt, i),

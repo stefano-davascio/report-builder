@@ -1,12 +1,14 @@
 'use client';
 
 /**
- * Networks-column rendering for the reports table — Figma 830:44403.
+ * Networks-column rendering for the reports table — Figma 1597:463854
+ * ("Second report social icons" — 3 visible icons + flush-left at
+ * `left-[91px]` inside the 274-px cell).
  *
- * Shows up to two network glyphs (20 px each, 4 px gap), then collapses
- * the rest into a "+N" overflow indicator. The overflow is plain text
- * (NOT a pill / chip) — 16/24 #626165 — sitting at the same baseline
- * as the icons.
+ * Shows up to THREE network glyphs (20 px each, 4 px gap), then
+ * collapses the rest into a "+N" overflow indicator. The overflow is
+ * plain text (NOT a pill / chip) — 16/24 #626165 — sitting at the
+ * same baseline as the icons.
  *
  * Hover popover (Figma 1364:324535) — when the user hovers the icon
  * stack we float a tooltip directly above it that lists EVERY network
@@ -26,7 +28,7 @@ import { useState } from 'react';
 import { Platform } from '@/types';
 import { PlatformIcon } from '@/components/report/PlatformIcon';
 
-const VISIBLE = 2;
+const VISIBLE = 3;
 
 // All platforms `PlatformIcon` knows how to render. Anything outside
 // this list quietly drops out of the row — important so the column

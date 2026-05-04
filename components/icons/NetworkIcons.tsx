@@ -103,7 +103,7 @@ export function IconNetworkAll({ size = 24, className, color = '#201E24' }: Netw
     ['--stroke-0']: color,
   };
   return (
-    <Tile size={size} className={className} overflow="hidden" style={style}>
+    <Tile size={size} className={className} overflow="visible" style={style}>
       <Layer inset="8.33% 12.5% 12.5% 8.33%">
         <Layer inset="-3.95%">
           <svg viewBox="0 0 20.5 20.5" {...LAYER_SVG_PROPS} overflow="visible">
@@ -126,7 +126,7 @@ export function IconNetworkAll({ size = 24, className, color = '#201E24' }: Netw
 // ───────────────────────────────────────────────────────────────────────────
 export function IconNetworkFacebook({ size = 24, className }: NetworkIconProps) {
   return (
-    <Tile size={size} className={className} overflow="hidden">
+    <Tile size={size} className={className} overflow="visible">
       <Layer inset="4.17%">
         <svg viewBox="0 0 22 22" {...LAYER_SVG_PROPS}>
           <circle cx="11" cy="11" r="11" fill="white" />
@@ -151,7 +151,7 @@ export function IconNetworkFacebook({ size = 24, className }: NetworkIconProps) 
 // ───────────────────────────────────────────────────────────────────────────
 export function IconNetworkInstagram({ size = 24, className }: NetworkIconProps) {
   return (
-    <Tile size={size} className={className} overflow="hidden">
+    <Tile size={size} className={className} overflow="visible">
       <Layer inset="4.17%">
         <svg viewBox="0 0 21.9998 22" {...LAYER_SVG_PROPS}>
           <path
@@ -209,7 +209,7 @@ export function IconNetworkInstagram({ size = 24, className }: NetworkIconProps)
 // ───────────────────────────────────────────────────────────────────────────
 export function IconNetworkTikTok({ size = 24, className }: NetworkIconProps) {
   return (
-    <Tile size={size} className={className} overflow="hidden">
+    <Tile size={size} className={className} overflow="visible">
       <Layer inset="4.17% 13.86% 12.91% 9.4%">
         <svg viewBox="0 0 18.4174 19.9023" {...LAYER_SVG_PROPS}>
           <path
@@ -243,7 +243,7 @@ export function IconNetworkTikTok({ size = 24, className }: NetworkIconProps) {
 // ───────────────────────────────────────────────────────────────────────────
 export function IconNetworkYouTube({ size = 24, className }: NetworkIconProps) {
   return (
-    <Tile size={size} className={className} overflow="hidden">
+    <Tile size={size} className={className} overflow="visible">
       <Layer inset="16.67% 4.17% 18.88% 4.17%">
         <svg viewBox="0 0 22 15.4687" {...LAYER_SVG_PROPS}>
           <path
@@ -273,7 +273,7 @@ export function IconNetworkYouTube({ size = 24, className }: NetworkIconProps) {
 // ───────────────────────────────────────────────────────────────────────────
 export function IconNetworkLinkedIn({ size = 24, className }: NetworkIconProps) {
   return (
-    <Tile size={size} className={className} overflow="hidden">
+    <Tile size={size} className={className} overflow="visible">
       <Layer inset="4.17%">
         <svg viewBox="0 0 22 22" {...LAYER_SVG_PROPS}>
           <path
@@ -308,7 +308,7 @@ export function IconNetworkLinkedIn({ size = 24, className }: NetworkIconProps) 
 // ───────────────────────────────────────────────────────────────────────────
 export function IconNetworkGA({ size = 24, className }: NetworkIconProps) {
   return (
-    <Tile size={size} className={className} overflow="hidden">
+    <Tile size={size} className={className} overflow="visible">
       <Layer inset="8.33% 15.53% 8.33% 64.58%">
         <svg viewBox="0 0 4.77273 20" {...LAYER_SVG_PROPS}>
           <path
@@ -340,7 +340,7 @@ export function IconNetworkGA({ size = 24, className }: NetworkIconProps) {
 // ───────────────────────────────────────────────────────────────────────────
 export function IconNetworkX({ size = 24, className }: NetworkIconProps) {
   return (
-    <Tile size={size} className={className} overflow="hidden">
+    <Tile size={size} className={className} overflow="visible">
       <Layer inset="9.38% 4.89% 9.38% 5.22%">
         <svg viewBox="0 0 21.573 19.5" {...LAYER_SVG_PROPS}>
           <path
@@ -358,7 +358,7 @@ export function IconNetworkX({ size = 24, className }: NetworkIconProps) {
 // ───────────────────────────────────────────────────────────────────────────
 export function IconNetworkThreads({ size = 24, className }: NetworkIconProps) {
   return (
-    <Tile size={size} className={className} overflow="hidden">
+    <Tile size={size} className={className} overflow="visible">
       <Layer inset="4.17% 10.76% 4.17% 10.37%">
         <svg viewBox="0 0 18.9273 22" {...LAYER_SVG_PROPS}>
           <path
@@ -376,7 +376,7 @@ export function IconNetworkThreads({ size = 24, className }: NetworkIconProps) {
 // ───────────────────────────────────────────────────────────────────────────
 export function IconNetworkBluesky({ size = 24, className }: NetworkIconProps) {
   return (
-    <Tile size={size} className={className} overflow="hidden">
+    <Tile size={size} className={className} overflow="visible">
       <Layer inset="8.83% 4.17% 10.46% 4.17%">
         <svg viewBox="0 0 22 19.3705" {...LAYER_SVG_PROPS}>
           <path
