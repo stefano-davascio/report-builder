@@ -508,7 +508,7 @@ export function ReportsTable({
 //     bg #EDEAFF and label #4D36FF; inactive bg white, label #201E24.
 //   • Next pill      — "Next" + chevron_right, h-32 px-12 rounded-4,
 //     bg white, label #201E24 (or #908F92 when at last page).
-//   • Per-page menu  — bordered (1 px #F3F3F4) pill, h-32 px-13, label
+//   • Per-page menu  — bordered (1 px #E8E8E9) pill, h-32 px-13, label
 //     "{N} per page" + chevron_down, bg white, label #201E24. Click
 //     opens a small upward menu with the values from
 //     PAGE_SIZE_OPTIONS — the dropdown opens UPWARD because it lives
@@ -698,7 +698,7 @@ function PerPageSelector({
         className={cn(
           'h-[32px] min-w-[32px] px-[13px] rounded-[4px] bg-white',
           'inline-flex items-center justify-center gap-[8px]',
-          'border border-[#F3F3F4]',
+          'border border-[#E8E8E9]',
           'text-[12px] leading-[21px] font-medium text-[#201E24]',
           'hover:bg-[#F3F3F4] transition-colors',
         )}
