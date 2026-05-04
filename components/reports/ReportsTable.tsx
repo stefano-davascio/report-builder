@@ -23,7 +23,7 @@
  *     not-sorted → desc → asc → not-sorted (third click clears)
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { MockReport, FILTER_OPTIONS } from '@/lib/reports-data';
 import { FilterDropdown } from './FilterDropdown';
 import { ReportRow, REPORT_ROW_COLUMNS } from './ReportRow';
@@ -45,7 +45,23 @@ interface ReportsTableProps {
   onRename: (id: string, name: string) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
+  /** Show the search input above the column header strip.  Driven by
+   *  the Scenario Switcher's "many" / "filtered" presets — designs
+   *  spec it as hidden when the list is small enough that scanning is
+   *  faster than typing. */
+  searchEnabled?: boolean;
+  /** Show the pagination footer below the row body when there's more
+   *  than one page worth of results.  Same Scenario-Switcher gating —
+   *  small lists don't need pagination chrome. */
+  paginationEnabled?: boolean;
+  /** Filter chip ids to start with selected.  Used by the
+   *  Scenario Switcher's "filtered" preset so the table mounts with a
+   *  pre-applied filter chip + reduced result set, without forcing the
+   *  parent to reach into the table's internal state. */
+  initialFilters?: ReadonlySet<string>;
 }
+
+const PAGE_SIZE = 10;
 
 export type SortKey = 'name' | 'modifiedAt' | 'modules';
 export type SortDir = 'asc' | 'desc';
@@ -68,8 +84,27 @@ export function ReportsTable({
   onRename,
   onDuplicate,
   onDelete,
+  searchEnabled = false,
+  paginationEnabled = false,
+  initialFilters,
 }: ReportsTableProps) {
-  const [selectedFilters, setSelectedFilters] = useState<Set<string>>(new Set());
+  // Selected-filter state seeds from `initialFilters` so the
+  // Scenario Switcher's "filtered" preset can mount with chips already
+  // applied.  We deliberately don't sync to subsequent `initialFilters`
+  // changes — once the user has picked their own chips the seed shouldn't
+  // overwrite them. The `key={reportListState}` on this component upstream
+  // takes care of remounting with a fresh seed when the scenario changes.
+  const [selectedFilters, setSelectedFilters] = useState<Set<string>>(
+    () => new Set(initialFilters ?? []),
+  );
+  // Free-text search query — only meaningful when `searchEnabled` is
+  // true; the input itself is conditionally rendered, so for small
+  // lists this state stays at "" and adds no overhead.
+  const [searchQuery, setSearchQuery] = useState('');
+  // Current page (1-indexed). Reset to 1 whenever filters or search
+  // change so the user never lands on an empty page after narrowing
+  // results.
+  const [page, setPage] = useState(1);
   // Initial sort intentionally has NO active key — every column should
   // render with the neutral `IconSortUpDown` glyph until the user
   // clicks one. The mock data is already in modifiedAt-desc order at
@@ -88,17 +123,29 @@ export function ReportsTable({
   // Only the Network category has data wiring today; the other category
   // selections render as chips but no-op against the data — preserves the
   // affordance end-to-end so the Figma drill-in pattern reads the same.
+  // Search runs ON TOP of filters: chips first, then case-insensitive
+  // substring match against the report name.
   const filtered = useMemo(() => {
-    if (selectedFilters.size === 0) return reports;
-    const selectedNetworks = new Set<string>();
-    for (const id of selectedFilters) {
-      const opt = FILTER_OPTIONS.find((o) => o.id === id);
-      if (!opt || opt.category !== 'Network') continue;
-      selectedNetworks.add(opt.label.toLowerCase());
+    let rows = reports;
+    if (selectedFilters.size > 0) {
+      const selectedNetworks = new Set<string>();
+      for (const id of selectedFilters) {
+        const opt = FILTER_OPTIONS.find((o) => o.id === id);
+        if (!opt || opt.category !== 'Network') continue;
+        selectedNetworks.add(opt.label.toLowerCase());
+      }
+      if (selectedNetworks.size > 0) {
+        rows = rows.filter((r) =>
+          r.networks.some((n) => selectedNetworks.has(n)),
+        );
+      }
     }
-    if (selectedNetworks.size === 0) return reports;
-    return reports.filter((r) => r.networks.some((n) => selectedNetworks.has(n)));
-  }, [reports, selectedFilters]);
+    if (searchEnabled && searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      rows = rows.filter((r) => r.name.toLowerCase().includes(q));
+    }
+    return rows;
+  }, [reports, selectedFilters, searchEnabled, searchQuery]);
 
   // ── Sorting ──────────────────────────────────────────────────────────────
   const sorted = useMemo(() => {
@@ -114,6 +161,29 @@ export function ReportsTable({
     });
     return arr;
   }, [filtered, sort]);
+
+  // ── Pagination ───────────────────────────────────────────────────────────
+  // Page math runs after sort so the page slice respects the active
+  // ordering.  When pagination is OFF we render every row (no slice);
+  // the math still runs but `pageRows === sorted`.
+  const totalPages = paginationEnabled
+    ? Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
+    : 1;
+  // Guard against the user being on a page that no longer has rows
+  // (e.g. they were on page 3, applied a filter that left only 1
+  // page).  Clamp the displayed page without touching the state — a
+  // useEffect below brings the state back in line for the next render.
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const pageRows = paginationEnabled
+    ? sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+    : sorted;
+
+  // Reset to page 1 whenever the result count changes — keeps the user
+  // on something visible after they apply a filter or type a query.
+  // Tracked via a ref-style memo so we don't fight React's render cycle.
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [page, totalPages]);
 
   // ── Selected filter chips ────────────────────────────────────────────────
   const chips = [...selectedFilters]
@@ -149,6 +219,29 @@ export function ReportsTable({
       className="flex flex-col"
       style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
     >
+      {/* Optional search input — only mounts when `searchEnabled` is
+          true (Scenario Switcher's "many" / "filtered" presets).
+          Sits ABOVE the header strip so the visual rhythm of title +
+          filter chips below stays untouched on the small-list paths
+          where search is hidden. */}
+      {searchEnabled && (
+        <div className="mb-[16px]">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search reports by name..."
+            aria-label="Search reports"
+            className={cn(
+              'w-full max-w-[360px] h-[36px] px-[12px] rounded-[6px]',
+              'border border-[#E8E8E9] bg-white',
+              'text-[14px] leading-[21px] text-[#201E24] placeholder:text-[#9C9B9D]',
+              'focus:outline-none focus:border-[#4D36FF]',
+            )}
+          />
+        </div>
+      )}
+
       {/* Header strip — "Reports" title + filter trigger sit INLINE
           (Figma Frame 1295:124153 uses `flex gap-16 items-start`, not
           a justify-between split). Selected chips spill to the right of
@@ -252,8 +345,15 @@ export function ReportsTable({
         <div className={REPORT_ROW_COLUMNS.actions} aria-hidden="true" />
       </div>
 
-      {/* Body */}
-      {sorted.length === 0 ? (
+      {/* Body — `pageRows` instead of `sorted` so pagination's slice
+          actually narrows the rendered set when enabled. When
+          pagination is OFF, `pageRows === sorted`, so the empty / row
+          paths behave the same as before. The empty-state copy keys
+          off `reports.length === 0` (the SOURCE list) rather than
+          `pageRows.length === 0`, so a search/filter that reduces the
+          result count correctly shows the "No matches" copy instead
+          of the first-run "No reports yet" copy. */}
+      {pageRows.length === 0 ? (
         <EmptyState
           title={reports.length === 0 ? 'No reports yet' : 'No matches'}
           description={
@@ -264,11 +364,11 @@ export function ReportsTable({
         />
       ) : (
         <div>
-          {sorted.map((r, i) => (
+          {pageRows.map((r, i) => (
             <ReportRow
               key={r.id}
               report={r}
-              isLast={i === sorted.length - 1}
+              isLast={i === pageRows.length - 1}
               renaming={renamingId === r.id}
               onStartRename={() => setRenamingId(r.id)}
               onCommitRename={(next) => {
@@ -281,6 +381,20 @@ export function ReportsTable({
             />
           ))}
         </div>
+      )}
+
+      {/* Pagination footer — only mounts when `paginationEnabled` AND
+          there's actually more than one page worth of results. A
+          single-page result set hides the footer entirely so the UI
+          doesn't surface controls that wouldn't move anywhere. */}
+      {paginationEnabled && totalPages > 1 && (
+        <PaginationFooter
+          page={safePage}
+          totalPages={totalPages}
+          totalItems={sorted.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+        />
       )}
 
       {/* Delete confirmation dialog — Figma 1366:346431. Open whenever
@@ -297,6 +411,105 @@ export function ReportsTable({
         }}
       />
     </section>
+  );
+}
+
+// ── Pagination ─────────────────────────────────────────────────────────────
+
+interface PaginationFooterProps {
+  page: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
+  onPageChange: (next: number) => void;
+}
+
+/**
+ * Pagination footer — minimal controls scoped to the demo tool's "many"
+ * preset. Renders the visible-row range ("11–20 of 25"), prev/next
+ * buttons, and a numbered page strip with current-page highlight.
+ * Visually quieter than the row body so it reads as scaffolding rather
+ * than competing with the rows themselves.
+ */
+function PaginationFooter({
+  page,
+  totalPages,
+  totalItems,
+  pageSize,
+  onPageChange,
+}: PaginationFooterProps) {
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, totalItems);
+  const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+  return (
+    <div
+      className="flex items-center justify-between mt-[16px] pt-[16px] border-t border-[#F3F3F4] text-[13px] text-[#4C4B4F]"
+      style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
+    >
+      <span>
+        {start}–{end} of {totalItems}
+      </span>
+      <div className="flex items-center gap-[4px]">
+        <PageButton
+          disabled={page === 1}
+          onClick={() => onPageChange(page - 1)}
+          ariaLabel="Previous page"
+        >
+          ‹
+        </PageButton>
+        {pages.map((p) => (
+          <PageButton
+            key={p}
+            active={p === page}
+            onClick={() => onPageChange(p)}
+            ariaLabel={`Page ${p}`}
+          >
+            {p}
+          </PageButton>
+        ))}
+        <PageButton
+          disabled={page === totalPages}
+          onClick={() => onPageChange(page + 1)}
+          ariaLabel="Next page"
+        >
+          ›
+        </PageButton>
+      </div>
+    </div>
+  );
+}
+
+function PageButton({
+  children,
+  onClick,
+  active,
+  disabled,
+  ariaLabel,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  active?: boolean;
+  disabled?: boolean;
+  ariaLabel: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={disabled ? undefined : onClick}
+      aria-label={ariaLabel}
+      aria-current={active ? 'page' : undefined}
+      disabled={disabled}
+      className={cn(
+        'min-w-[28px] h-[28px] px-[8px] rounded-[4px] flex items-center justify-center',
+        'text-[13px] leading-[16px] transition-colors',
+        active
+          ? 'bg-[#EDEAFF] text-[#4D36FF]'
+          : 'text-[#4C4B4F] hover:bg-[#F3F3F4]',
+        disabled && 'opacity-40 cursor-default hover:bg-transparent',
+      )}
+    >
+      {children}
+    </button>
   );
 }
 

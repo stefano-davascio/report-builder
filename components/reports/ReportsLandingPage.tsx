@@ -32,6 +32,22 @@ interface ReportsLandingPageProps {
   onRename: (id: string, name: string) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
+  /** Templates to surface in the Build-a-new-report carousel.  Defaults
+   *  to the production list (`REPORT_TEMPLATES`) so existing callers
+   *  don't need to change.  The Scenario Switcher passes a filtered
+   *  subset for the "beta" template scope. */
+  templates?: ReportTemplate[];
+  /** Forwarded straight through to ReportsTable — see that component
+   *  for the semantics of each. Optional so the production caller can
+   *  omit them and get the existing default behavior. */
+  searchEnabled?: boolean;
+  paginationEnabled?: boolean;
+  initialFilters?: ReadonlySet<string>;
+  /** When the underlying scenario changes the parent passes a new key
+   *  here; we forward it onto ReportsTable so the table fully remounts
+   *  (clearing search query, page index, and any user-applied filters)
+   *  rather than clinging to state from the previous scenario. */
+  scenarioKey?: string;
 }
 
 export function ReportsLandingPage({
@@ -41,6 +57,11 @@ export function ReportsLandingPage({
   onRename,
   onDuplicate,
   onDelete,
+  templates = REPORT_TEMPLATES,
+  searchEnabled,
+  paginationEnabled,
+  initialFilters,
+  scenarioKey,
 }: ReportsLandingPageProps) {
   return (
     <div
@@ -58,14 +79,18 @@ export function ReportsLandingPage({
           the only "Reports" label sits inside the table's header
           cluster — so we don't render one here either. */}
       <main className="max-w-[1114px] mx-auto pt-[40px] pb-[80px] flex flex-col gap-[48px]">
-        <BuildNewReportSection templates={REPORT_TEMPLATES} onSelect={onCreate} />
+        <BuildNewReportSection templates={templates} onSelect={onCreate} />
 
         <ReportsTable
+          key={scenarioKey}
           reports={reports}
           onOpen={onOpen}
           onRename={onRename}
           onDuplicate={onDuplicate}
           onDelete={onDelete}
+          searchEnabled={searchEnabled}
+          paginationEnabled={paginationEnabled}
+          initialFilters={initialFilters}
         />
       </main>
     </div>

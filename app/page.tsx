@@ -19,15 +19,21 @@
  *   • Builder Save               → write back into `reports`
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ReportBuilderPage } from '@/components/report/ReportBuilderPage';
 import { ReportsLandingPage } from '@/components/reports/ReportsLandingPage';
+import { ScenarioSwitcher } from '@/components/reports/ScenarioSwitcher';
 import {
   INITIAL_REPORTS,
   MockReport,
   ReportTemplate,
   templateSelectedProfileIds,
 } from '@/lib/reports-data';
+import { useScenario } from '@/lib/scenario';
+import {
+  reportsForScenario,
+  templatesForScope,
+} from '@/lib/scenario-data';
 import { uid } from '@/lib/utils';
 import { ReportModule } from '@/types';
 
@@ -68,6 +74,39 @@ function reissueModuleIds(modules: ReportModule[]): ReportModule[] {
 export default function Home() {
   const [reports, setReports] = useState<MockReport[]>(INITIAL_REPORTS);
   const [view, setView] = useState<View>({ kind: 'landing' });
+
+  // ── Scenario Switcher (internal demo tool) ───────────────────────────────
+  // Drives which template subset + which mocked reports list shows on
+  // the landing page. Persists across page refreshes via localStorage.
+  // The actual `reports` state above continues to hold the user's
+  // session-authored reports — scenarios swap in mocked datasets only
+  // when `reportListState !== 'few'` (or any time the user wants to
+  // see the empty / many / filtered state). Renamed reports the user
+  // creates in a non-scenario state are preserved separately because
+  // they live in `reports`, not in the scenario dataset.
+  const [scenario, setScenario] = useScenario();
+
+  // Templates surfaced in the carousel.  Filtered to the beta subset
+  // when `templateScope === 'beta'`, otherwise the full production list.
+  const scenarioTemplates = useMemo(
+    () => templatesForScope(scenario.templateScope),
+    [scenario.templateScope],
+  );
+
+  // Reports + chrome flags for the table.  When the scenario is "few"
+  // we use the user's actual `reports` state (so create/rename/delete
+  // stay observable while flipping between scenarios on the same
+  // session).  Every other scenario substitutes the scenario dataset
+  // wholesale — the demo tool deliberately replaces the visible list
+  // so designers can review specific list states without authoring
+  // 25 reports by hand.
+  const scenarioRender = useMemo(() => {
+    const preset = reportsForScenario(scenario.reportListState);
+    if (scenario.reportListState === 'few') {
+      return { ...preset, reports };
+    }
+    return preset;
+  }, [scenario.reportListState, reports]);
 
   // ── Landing → Builder transitions ─────────────────────────────────────────
 
@@ -197,7 +236,13 @@ export default function Home() {
   );
 
   // ── Render ───────────────────────────────────────────────────────────────
+  // Build the route-specific subtree first, then render alongside the
+  // ScenarioSwitcher so the switcher remains visible on every route
+  // (landing, builder, builder-draft). The switcher portals itself to
+  // document.body via createPortal, so its placement here is purely
+  // about lifecycle — it mounts once with the page tree.
 
+  let route: React.ReactNode;
   if (view.kind === 'builder') {
     const active = reports.find((r) => r.id === view.reportId);
     // Defensive — if the active report was deleted out from under us
@@ -207,7 +252,7 @@ export default function Home() {
       setView({ kind: 'landing' });
       return null;
     }
-    return (
+    route = (
       <ReportBuilderPage
         // `key` ensures the builder fully remounts when switching
         // between two saved reports — otherwise its useState seeds
@@ -220,15 +265,13 @@ export default function Home() {
         onSave={(snapshot) => handleBuilderSave(active.id, snapshot)}
       />
     );
-  }
-
-  if (view.kind === 'builder-draft') {
+  } else if (view.kind === 'builder-draft') {
     const { draft } = view;
     // Same `key` strategy as the saved-report branch — `draft.id` is
     // also the id the report will get once saved, so the ReportBuilder
     // instance survives the draft → saved transition without
     // remounting (which would clobber the user's mid-edit state).
-    return (
+    route = (
       <ReportBuilderPage
         key={draft.id}
         initialTitle={draft.name}
@@ -238,16 +281,33 @@ export default function Home() {
         onSave={(snapshot) => handleSaveDraft(draft, snapshot)}
       />
     );
+  } else {
+    // Landing — feed it the scenario-derived templates + reports so
+    // flipping the Scenario Switcher visibly reshapes the carousel and
+    // the table without remounting the page wrapper. `scenarioKey`
+    // remounts the inner ReportsTable when the list scenario changes
+    // so search / page / chip state resets cleanly between scenarios.
+    route = (
+      <ReportsLandingPage
+        reports={scenarioRender.reports}
+        onOpen={handleOpen}
+        onCreate={handleCreate}
+        onRename={handleRename}
+        onDuplicate={handleDuplicate}
+        onDelete={handleDelete}
+        templates={scenarioTemplates}
+        searchEnabled={scenarioRender.searchEnabled}
+        paginationEnabled={scenarioRender.paginationEnabled}
+        initialFilters={scenarioRender.initialFilters}
+        scenarioKey={scenario.reportListState}
+      />
+    );
   }
 
   return (
-    <ReportsLandingPage
-      reports={reports}
-      onOpen={handleOpen}
-      onCreate={handleCreate}
-      onRename={handleRename}
-      onDuplicate={handleDuplicate}
-      onDelete={handleDelete}
-    />
+    <>
+      {route}
+      <ScenarioSwitcher scenario={scenario} onChange={setScenario} />
+    </>
   );
 }
