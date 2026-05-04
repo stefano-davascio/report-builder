@@ -507,10 +507,13 @@ export function ReportsTable({
 //     has a value, regardless of focus state — this is what
 //     Figma's `justify-between` flip in the inner Search bar accomplishes.
 //
-// Colors:
-//   • `#78767C` — neutral500, used for placeholder, leading search icon
-//      and the typed value (Figma keeps the typed text in the same
-//      neutral, NOT in #201E24 — verified directly in the design.)
+// Colors (verified directly against the Figma SVG assets):
+//   • Leading search glyph + trailing close glyph render with
+//     `stroke="var(--stroke-0, #201E24)"` in the asset → use #201E24
+//     (TRIUS/theme/light/on-background). NOT the placeholder gray.
+//   • `#78767C` — neutral500, used ONLY for the placeholder label and
+//      for the typed value text (Figma keeps the typed text in the
+//      neutral, not in #201E24 — verified in the design's typed state).
 //   • `#4D36FF` — brand primary, used for the focused border and the
 //      translucent focus ring (`0 0 0 2px rgba(77,54,255,0.25)`).
 //
@@ -557,9 +560,13 @@ function SearchBar({ value, onChange }: SearchBarProps) {
           : undefined
       }
     >
-      {/* Leading search icon — 16-px tile, neutral500 stroke. Stays
-          present in every state. */}
-      <IconSearch size={16} color="#78767C" />
+      {/* Leading search icon — 16-px tile, on-background stroke
+          (#201E24 — verified directly in the Figma SVG asset, where
+          the path renders with `stroke="var(--stroke-0, #201E24)"`).
+          The icon does NOT match the placeholder color: only the
+          placeholder text is in neutral500 #78767C; the icon glyph
+          stays in the darker on-background color across every state. */}
+      <IconSearch size={16} color="#201E24" />
 
       {/* The input itself is visually invisible — `bg-transparent`,
           no border, no outline. Container chrome carries the visuals.
@@ -609,7 +616,7 @@ function SearchBar({ value, onChange }: SearchBarProps) {
             'w-[16px] h-[16px] cursor-pointer',
           )}
         >
-          <IconClose size={16} color="#78767C" />
+          <IconClose size={16} color="#201E24" />
         </button>
       )}
     </div>
