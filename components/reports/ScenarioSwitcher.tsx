@@ -35,6 +35,10 @@ interface ScenarioSwitcherProps {
   onChange: (next: Scenario) => void;
 }
 
+// `hint` lives only as a hover tooltip now — the panel itself shows
+// label-only rows so the switcher reads as a quick control surface,
+// not a documentation page. Keep the descriptions here so anyone
+// auditing the file still sees what each scenario means.
 const TEMPLATE_SCOPES: { id: TemplateScope; label: string; hint: string }[] = [
   { id: 'full', label: 'Full network', hint: 'all 8 cards (current production target)' },
   { id: 'beta', label: 'Beta launch', hint: 'Scratch + TikTok + Instagram only' },
@@ -43,7 +47,7 @@ const TEMPLATE_SCOPES: { id: TemplateScope; label: string; hint: string }[] = [
 const REPORT_LIST_STATES: { id: ReportListState; label: string; hint: string }[] = [
   { id: 'empty',    label: 'Empty',     hint: 'no reports — first-run state' },
   { id: 'few',      label: 'Few',       hint: '3 reports — no search / pagination' },
-  { id: 'many',     label: 'Many',      hint: '25 reports — search + pagination' },
+  { id: 'many',     label: 'Many',      hint: '25+ reports — search + pagination' },
   { id: 'filtered', label: 'Filtered',  hint: 'pre-applied filter chip' },
 ];
 
@@ -146,15 +150,15 @@ function ExpandedPanel({
       // to the underlying page.
       className={cn(
         'pointer-events-auto',
-        'w-[280px] rounded-l-md border border-r-0 border-dashed border-[#E5C200] bg-[#FFFCEA]',
+        'w-[220px] rounded-l-md border border-r-0 border-dashed border-[#E5C200] bg-[#FFFCEA]',
         'shadow-[-2px_4px_12px_rgba(0,0,0,0.1)]',
         'text-[12px] text-[#3A3000]',
       )}
     >
-      {/* Header — DEMO TOOL chip + collapse button. */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-dashed border-[#E5C200]">
+      {/* Header — single "Scenarios" label + collapse button. */}
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-dashed border-[#E5C200]">
         <span className="text-[10px] font-bold tracking-[0.18em] uppercase text-[#7A6500]">
-          Demo Tool · Scenarios
+          Scenarios
         </span>
         <button
           type="button"
@@ -169,7 +173,7 @@ function ExpandedPanel({
         </button>
       </div>
 
-      <Section title="Landing page">
+      <Section title="Landing">
         {TEMPLATE_SCOPES.map((opt) => (
           <RadioRow
             key={opt.id}
@@ -182,7 +186,7 @@ function ExpandedPanel({
         ))}
       </Section>
 
-      <Section title="Reports list">
+      <Section title="Reports">
         {REPORT_LIST_STATES.map((opt) => (
           <RadioRow
             key={opt.id}
@@ -194,22 +198,20 @@ function ExpandedPanel({
           />
         ))}
       </Section>
-
-      <p className="px-3 py-2 text-[10px] leading-[14px] text-[#7A6500] border-t border-dashed border-[#E5C200]">
-        Internal demo state — not visible to customers. Persisted to
-        localStorage.
-      </p>
     </div>
   );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="px-3 py-2 border-b border-dashed border-[#E5C200] last:border-b-0">
-      <p className="text-[10px] font-bold tracking-[0.16em] uppercase text-[#7A6500] mb-1.5">
+    <div className="px-3 py-1.5 border-b border-dashed border-[#E5C200] last:border-b-0">
+      <p className="text-[10px] font-bold tracking-[0.16em] uppercase text-[#7A6500] mb-1">
         {title}
       </p>
-      <div className="flex flex-col gap-1">{children}</div>
+      {/* gap-0 — rows are tight enough that the radio + label visually
+          group themselves; padding inside each row gives breathing
+          room without needing extra vertical space between rows. */}
+      <div className="flex flex-col">{children}</div>
     </div>
   );
 }
@@ -217,6 +219,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 interface RadioRowProps {
   checked: boolean;
   label: string;
+  /** Hover-only context. Stays out of the visible UI; surfaces via
+   *  `title=` so a reviewer who's never seen the tool can still find
+   *  out what each scenario means without bloating the layout. */
   hint: string;
   onChange: () => void;
   /** Shared `name` so native radio semantics keep one selection per
@@ -227,9 +232,13 @@ interface RadioRowProps {
 function RadioRow({ checked, label, hint, onChange, name }: RadioRowProps) {
   return (
     <label
+      title={hint}
       className={cn(
-        'flex items-start gap-2 px-2 py-1 rounded cursor-pointer transition-colors',
-        checked ? 'bg-[#FFF1A8]' : 'hover:bg-[#FFF8C7]',
+        'flex items-center gap-2 px-2 py-[3px] rounded cursor-pointer transition-colors',
+        // No bold "selected" fill — the radio's purple-yellow dot +
+        // semibold label are enough to indicate state. Hover surfaces
+        // a very light tint so the row still feels tappable.
+        'hover:bg-[#FFF8C7]',
       )}
     >
       <input
@@ -237,15 +246,15 @@ function RadioRow({ checked, label, hint, onChange, name }: RadioRowProps) {
         name={name}
         checked={checked}
         onChange={onChange}
-        className="mt-0.5 accent-[#7A6500]"
+        className="accent-[#7A6500]"
       />
-      <span className="flex-1 min-w-0">
-        <span className="block text-[12px] font-medium text-[#3A3000]">
-          {label}
-        </span>
-        <span className="block text-[10px] leading-[14px] text-[#7A6500]">
-          {hint}
-        </span>
+      <span
+        className={cn(
+          'flex-1 min-w-0 text-[12px] leading-[16px] text-[#3A3000]',
+          checked ? 'font-semibold' : 'font-normal',
+        )}
+      >
+        {label}
       </span>
     </label>
   );
