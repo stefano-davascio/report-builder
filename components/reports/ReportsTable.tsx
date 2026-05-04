@@ -185,6 +185,22 @@ export function ReportsTable({
     if (page > totalPages) setPage(1);
   }, [page, totalPages]);
 
+  // ── Source-empty rule ────────────────────────────────────────────────────
+  // When the source list is empty (no reports authored yet), all
+  // list-level chrome — search, filter button, filter chips, column
+  // headers — collapses out of the layout: there's nothing to search,
+  // filter, or sort.  Only the section heading + the empty-state tile
+  // remain. This is a hard rule (per Figma 1452:457037), so we derive
+  // it from the data instead of routing through a prop — every
+  // scenario gets the right behavior automatically.
+  //
+  // Note: this is DIFFERENT from "filtered to zero" — when reports has
+  // rows but the active filter chip leaves zero matches, we DO keep
+  // the filter button + chips visible (so the user can clear the
+  // filter back to a non-empty result). The body in that case shows
+  // the "No matches" copy, not "No reports yet".
+  const isSourceEmpty = reports.length === 0;
+
   // ── Selected filter chips ────────────────────────────────────────────────
   const chips = [...selectedFilters]
     .map((id) => FILTER_OPTIONS.find((o) => o.id === id))
@@ -220,11 +236,10 @@ export function ReportsTable({
       style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
     >
       {/* Optional search input — only mounts when `searchEnabled` is
-          true (Scenario Switcher's "many" / "filtered" presets).
-          Sits ABOVE the header strip so the visual rhythm of title +
-          filter chips below stays untouched on the small-list paths
-          where search is hidden. */}
-      {searchEnabled && (
+          true (Scenario Switcher's "many" / "filtered" presets) AND
+          the source list is non-empty.  Searching an empty list is a
+          no-op surface and the design hides it on the empty state. */}
+      {searchEnabled && !isSourceEmpty && (
         <div className="mb-[16px]">
           <input
             type="text"
@@ -257,32 +272,39 @@ export function ReportsTable({
             1295:124155: h-32, px-13, 4-px radius, 1-px #201E24 @ 20 %
             border, gap-7 between icon and label, `plus_circle` glyph
             at 18 px (catalog `IconPlusCircle`, not `IconPlus`), 12/21
-            Medium #201E24 label. */}
-        <FilterDropdown
-          options={FILTER_OPTIONS}
-          selectedIds={selectedFilters}
-          onToggle={toggleFilter}
-          renderTrigger={(open, count) => (
-            <span
-              className={cn(
-                'h-[32px] min-w-[32px] px-[13px] rounded-[4px]',
-                'inline-flex items-center justify-center gap-[7px]',
-                'border border-[rgba(32,30,36,0.2)]',
-                'text-[12px] leading-[21px] font-medium text-[#201E24]',
-                open ? 'bg-[#F3F3F4]' : 'bg-transparent',
-                'hover:bg-[#F3F3F4] transition-colors',
-              )}
-            >
-              <IconPlusCircle size={18} color="#201E24" />
-              <span>Filter{count > 0 ? ` · ${count}` : ''}</span>
-            </span>
-          )}
-        />
+            Medium #201E24 label.
+            Hidden when the source list is empty (Figma 1452:457037 —
+            empty state collapses all list-level chrome). */}
+        {!isSourceEmpty && (
+          <FilterDropdown
+            options={FILTER_OPTIONS}
+            selectedIds={selectedFilters}
+            onToggle={toggleFilter}
+            renderTrigger={(open, count) => (
+              <span
+                className={cn(
+                  'h-[32px] min-w-[32px] px-[13px] rounded-[4px]',
+                  'inline-flex items-center justify-center gap-[7px]',
+                  'border border-[rgba(32,30,36,0.2)]',
+                  'text-[12px] leading-[21px] font-medium text-[#201E24]',
+                  open ? 'bg-[#F3F3F4]' : 'bg-transparent',
+                  'hover:bg-[#F3F3F4] transition-colors',
+                )}
+              >
+                <IconPlusCircle size={18} color="#201E24" />
+                <span>Filter{count > 0 ? ` · ${count}` : ''}</span>
+              </span>
+            )}
+          />
+        )}
 
         {/* Filter chips — render to the right of the trigger. Active
             selections still live in the same eye-line as the button
-            that produced them. */}
-        {chips.length > 0 && (
+            that produced them. (Source-empty already hides everything
+            via the early return above; chips can never be present when
+            there are no rows because there's no filter button to set
+            them — but we still gate to be safe.) */}
+        {!isSourceEmpty && chips.length > 0 && (
           <div className="flex items-center gap-[8px] flex-wrap">
             {chips.map((c) => (
               <button
@@ -313,37 +335,42 @@ export function ReportsTable({
           the Name cell carries its own `pl-16` for breathing space.
           This matches Figma's column widths exactly (sum = 1114 = the
           content width) — adding gap/padding would overflow and clip
-          the trailing Actions cell off the right edge. */}
-      <div className="flex items-center h-[48px] border-b border-[#F3F3F4]">
-        <ColumnHeader
-          className={REPORT_ROW_COLUMNS.name}
-          label="Name"
-          sortKey="name"
-          state={sort}
-          onSort={(k) => setSort((s) => nextSortState(s, k))}
-        />
-        {/* "Modified" — was "Date modified", but the cell renders a
-            relative-time label (seconds / minutes / hours / days ago),
-            never an absolute date, so the shorter "Modified" describes
-            the column more accurately and matches the spec. */}
-        <ColumnHeader
-          className={REPORT_ROW_COLUMNS.date}
-          label="Modified"
-          sortKey="modifiedAt"
-          state={sort}
-          onSort={(k) => setSort((s) => nextSortState(s, k))}
-        />
-        <ColumnHeader
-          className={REPORT_ROW_COLUMNS.modules}
-          label="Modules"
-          sortKey="modules"
-          state={sort}
-          onSort={(k) => setSort((s) => nextSortState(s, k))}
-        />
-        {/* Networks: header frame is intentionally empty in Figma. */}
-        <div className={REPORT_ROW_COLUMNS.networks} aria-hidden="true" />
-        <div className={REPORT_ROW_COLUMNS.actions} aria-hidden="true" />
-      </div>
+          the trailing Actions cell off the right edge.
+          Hidden when the source list is empty — Figma 1452:457037
+          shows the empty state without column headers (no rows means
+          no columns to label). */}
+      {!isSourceEmpty && (
+        <div className="flex items-center h-[48px] border-b border-[#F3F3F4]">
+          <ColumnHeader
+            className={REPORT_ROW_COLUMNS.name}
+            label="Name"
+            sortKey="name"
+            state={sort}
+            onSort={(k) => setSort((s) => nextSortState(s, k))}
+          />
+          {/* "Modified" — was "Date modified", but the cell renders a
+              relative-time label (seconds / minutes / hours / days ago),
+              never an absolute date, so the shorter "Modified" describes
+              the column more accurately and matches the spec. */}
+          <ColumnHeader
+            className={REPORT_ROW_COLUMNS.date}
+            label="Modified"
+            sortKey="modifiedAt"
+            state={sort}
+            onSort={(k) => setSort((s) => nextSortState(s, k))}
+          />
+          <ColumnHeader
+            className={REPORT_ROW_COLUMNS.modules}
+            label="Modules"
+            sortKey="modules"
+            state={sort}
+            onSort={(k) => setSort((s) => nextSortState(s, k))}
+          />
+          {/* Networks: header frame is intentionally empty in Figma. */}
+          <div className={REPORT_ROW_COLUMNS.networks} aria-hidden="true" />
+          <div className={REPORT_ROW_COLUMNS.actions} aria-hidden="true" />
+        </div>
+      )}
 
       {/* Body — `pageRows` instead of `sorted` so pagination's slice
           actually narrows the rendered set when enabled. When
