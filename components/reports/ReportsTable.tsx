@@ -738,7 +738,7 @@ function PerPageSelector({
           role="listbox"
           aria-label="Items per page"
           className={cn(
-            'absolute right-0 z-30 min-w-[162px] max-w-[240px]',
+            'absolute left-0 z-30 min-w-[162px] max-w-[240px]',
             'bg-white rounded-[4px] overflow-hidden',
             'flex flex-col items-start py-[8px] px-[8px]',
           )}
