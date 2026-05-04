@@ -519,9 +519,11 @@ export function ReportsTable({
 //       • shadow: 1-px translucent ring + soft drop (NO border)
 //       • py-8 outer + px-8 inner gutter so option rows are inset
 //       • each row: gap-16 px-16 py-8, label 12/18 #201E24
-//       • selected row: bg #EDEAFF + trailing 16-px purple check_sm
-//         (#4D36FF). Label color stays #201E24 — the lavender bg and
-//         check do the work of indicating selection.
+//       • bg-white at rest, hover:bg-[#EDEAFF] (lavender is the HOVER
+//         state, not the active state — applies to every row including
+//         the currently-selected one)
+//       • selected row: a trailing 16-px purple check_sm (#4D36FF) is
+//         the ONLY active-state affordance.  Label color stays #201E24.
 
 interface PaginationFooterProps {
   page: number;
@@ -764,8 +766,7 @@ function PerPageSelector({
                   className={cn(
                     'w-full flex items-center gap-[16px] px-[16px] py-[8px] rounded-[4px]',
                     'text-[12px] leading-[18px] font-normal text-[#201E24]',
-                    'transition-colors',
-                    active ? 'bg-[#EDEAFF]' : 'bg-white hover:bg-[#F3F3F4]',
+                    'bg-white hover:bg-[#EDEAFF] transition-colors',
                   )}
                 >
                   <span className="flex-1 min-w-0 text-left truncate">
