@@ -21,7 +21,7 @@
  * derived data via `lib/scenario-data.ts`.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type {
   ReportListState,
@@ -76,12 +76,14 @@ export function ScenarioSwitcher({ scenario, onChange }: ScenarioSwitcherProps) 
 
   return createPortal(
     <div
-      // `fixed` so it never participates in the page's flex/grid math —
-      // a designer toggling scenarios never sees content reflow because
-      // of the panel itself.  `pointer-events-none` on the wrapper
-      // means clicks elsewhere on the page fall through; the inner
-      // chrome re-enables events for the clickable surfaces.
-      className="fixed top-1/2 right-0 z-[1000] -translate-y-1/2 pointer-events-none"
+      // Full-viewport overlay — neither participates in page layout
+      // (fixed inset-0) nor blocks clicks (`pointer-events-none`).
+      // The tab + panel inside re-enable pointer events on themselves
+      // so they remain clickable while everything else falls through.
+      // This wrapper exists ONLY to hold the panel/tab in a stable
+      // coordinate system so the drag handler's `clientX/Y` math is
+      // straightforward (page coords == overlay coords).
+      className="fixed inset-0 z-[1000] pointer-events-none"
       style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
     >
       {open ? (
@@ -108,6 +110,13 @@ function CollapsedTab({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       title="Open scenario switcher (demo tool)"
       className={cn(
+        // `absolute top-1/2 right-0 -translate-y-1/2` positions the
+        // tab against the viewport's right edge, vertically centered.
+        // Self-positioning here (rather than letting the wrapper do
+        // it) keeps the tab's resting place independent of the
+        // expanded panel — the panel can be dragged anywhere without
+        // affecting where the tab snaps back to on close.
+        'absolute top-1/2 right-0 -translate-y-1/2',
         'pointer-events-auto',
         // Dashed border + yellow accent so the tab reads as scaffolding,
         // not a real product feature.  Vertical writing mode lets the
@@ -142,29 +151,158 @@ function ExpandedPanel({
   onReportListState,
   onCollapse,
 }: ExpandedPanelProps) {
+  // Drag state lives entirely inside this component — when the panel
+  // closes, the parent unmounts ExpandedPanel and re-creating it on
+  // next open gives us a fresh `position = null`. That's the "snap
+  // back to default on close" behavior, no explicit reset needed.
+  //
+  //   • position === null   → render at the default right-edge anchor
+  //                            (absolute top-1/2 right-0)
+  //   • position is { x, y } → render at literal coords (absolute
+  //                            top-y left-x). `right` and the
+  //                            translate are dropped so the coords
+  //                            map 1:1 to viewport space.
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  // Refs for the drag math.
+  //   panelRef   — measures the panel's actual rect (width is 220 fixed
+  //                but height is dynamic, so we read it lazily).
+  //   offsetRef  — captures where inside the header the pointer grabbed
+  //                so the panel doesn't jump under the cursor.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const offsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      // Only start drag on primary button (left mouse / first touch).
+      if (e.button !== 0) return;
+      // The collapse button lives inside the header; if the user
+      // clicked on it, let the click flow normally without starting
+      // a drag.
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-no-drag]')) return;
+
+      const panel = panelRef.current;
+      if (!panel) return;
+
+      const rect = panel.getBoundingClientRect();
+
+      // Capture the cursor offset within the panel so subsequent
+      // moves keep the panel anchored under the same point of the
+      // header that the user grabbed.
+      offsetRef.current = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      };
+
+      // setPointerCapture routes all subsequent pointer events to
+      // this element until pointerup, even if the cursor leaves the
+      // header. That's what gives the drag its "smooth — never loses
+      // the cursor" feel and keeps every event scoped to this
+      // element instead of the document.
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setDragging(true);
+
+      // If this is the first drag, lock in the panel's CURRENT
+      // computed top/left as the starting position so the move
+      // handler has a coord system to work in.
+      setPosition({ x: rect.left, y: rect.top });
+    },
+    [],
+  );
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!dragging) return;
+
+      const panel = panelRef.current;
+      if (!panel) return;
+
+      const rect = panel.getBoundingClientRect();
+
+      // Clamp to viewport so the panel can't be dragged off-screen.
+      // 8 px padding at the edges keeps the resize-corner / scrollbar
+      // areas accessible.
+      const maxX = window.innerWidth - rect.width;
+      const maxY = window.innerHeight - rect.height;
+
+      const nextX = Math.max(0, Math.min(maxX, e.clientX - offsetRef.current.x));
+      const nextY = Math.max(0, Math.min(maxY, e.clientY - offsetRef.current.y));
+
+      setPosition({ x: nextX, y: nextY });
+    },
+    [dragging],
+  );
+
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!dragging) return;
+      e.currentTarget.releasePointerCapture(e.pointerId);
+      setDragging(false);
+    },
+    [dragging],
+  );
+
+  // Build the inline style that switches between the default right-
+  // edge anchor and a custom dragged position.  Default uses CSS-only
+  // (`right: 0; top: 50%; transform: translateY(-50%)`) so we don't
+  // need to measure the viewport up-front.
+  const positionStyle: React.CSSProperties =
+    position === null
+      ? { top: '50%', right: 0, transform: 'translateY(-50%)' }
+      : { top: position.y, left: position.x };
+
   return (
     <div
+      ref={panelRef}
       // Pointer events re-enabled here so radios + close button are
       // clickable; the wrapper one level up is `pointer-events-none`
       // so empty space outside the panel still passes clicks through
       // to the underlying page.
       className={cn(
-        'pointer-events-auto',
+        'absolute pointer-events-auto',
         'w-[220px] rounded-l-md border border-r-0 border-dashed border-[#E5C200] bg-[#FFFCEA]',
         'shadow-[-2px_4px_12px_rgba(0,0,0,0.1)]',
         'text-[12px] text-[#3A3000]',
+        // While dragging we kill text-selection on the whole panel so
+        // a stray cursor sweep doesn't highlight option labels mid-drag.
+        dragging && 'select-none',
       )}
+      style={{
+        ...positionStyle,
+        // When dragged the panel becomes pinned by left/top; when at
+        // rest it's pinned by right + translate. The CSS in
+        // `positionStyle` handles the swap, but we always ensure the
+        // border-radius reads as a free-floating panel once dragged
+        // (rounded on all sides) instead of just the left side.
+        ...(position !== null && { borderRadius: 6 }),
+      }}
     >
-      {/* Header — single "Scenarios" label + collapse button. */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-dashed border-[#E5C200]">
+      {/* Header — drag handle.  `cursor-grab` invites the user to
+          grab; flips to `grabbing` while a drag is active.  The
+          collapse button has `data-no-drag` so its clicks never
+          start a drag. */}
+      <div
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        className={cn(
+          'flex items-center justify-between px-3 py-1.5 border-b border-dashed border-[#E5C200]',
+          'select-none touch-none',
+          dragging ? 'cursor-grabbing' : 'cursor-grab',
+        )}
+      >
         <span className="text-[10px] font-bold tracking-[0.18em] uppercase text-[#7A6500]">
           Scenarios
         </span>
         <button
           type="button"
+          data-no-drag
           onClick={onCollapse}
           aria-label="Collapse scenario switcher"
-          className="w-5 h-5 flex items-center justify-center rounded text-[#7A6500] hover:bg-[#FFF8C7] transition-colors"
+          className="w-5 h-5 flex items-center justify-center rounded text-[#7A6500] hover:bg-[#FFF8C7] transition-colors cursor-pointer"
         >
           {/* Lucide-style ✕ rendered inline so we don't pull a new icon. */}
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
