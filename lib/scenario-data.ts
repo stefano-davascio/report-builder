@@ -23,11 +23,11 @@ import {
 // ── Templates ────────────────────────────────────────────────────────────
 
 /**
- * Beta launch scope per the design ask: only Start-from-scratch +
- * TikTok performance + Instagram performance. Anything not in this set
+ * Beta launch scope per Figma 1452:457037: only Start-from-scratch +
+ * TikTok performance + Facebook performance. Anything not in this set
  * is dropped from the carousel when `templateScope === 'beta'`.
  */
-const BETA_TEMPLATE_IDS = new Set(['tpl-tt', 'tpl-ig']);
+const BETA_TEMPLATE_IDS = new Set(['tpl-tt', 'tpl-fb']);
 
 export function templatesForScope(scope: TemplateScope): ReportTemplate[] {
   if (scope === 'full') return REPORT_TEMPLATES;

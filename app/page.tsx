@@ -296,6 +296,11 @@ export default function Home() {
         onDuplicate={handleDuplicate}
         onDelete={handleDelete}
         templates={scenarioTemplates}
+        // Premium badge on Start-from-scratch only when the beta scope
+        // is active (Figma 1452:457052). The full-network design
+        // doesn't show the badge, so the production-target view stays
+        // clean.
+        showScratchPremiumBadge={scenario.templateScope === 'beta'}
         searchEnabled={scenarioRender.searchEnabled}
         paginationEnabled={scenarioRender.paginationEnabled}
         initialFilters={scenarioRender.initialFilters}

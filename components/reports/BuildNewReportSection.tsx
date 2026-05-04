@@ -76,6 +76,63 @@ import { cn } from '@/lib/utils';
 interface BuildNewReportSectionProps {
   templates: ReportTemplate[];
   onSelect: (template: ReportTemplate) => void;
+  /** When true, the "Start from scratch" card surfaces the yellow
+   *  "Premium" badge in its top-right (Figma 1452:457052). Used by the
+   *  Scenario Switcher's `'beta'` template scope where scratch is gated
+   *  behind a paid tier during the beta launch. The full-network scope
+   *  ships the card unbadged. */
+  showScratchPremiumBadge?: boolean;
+}
+
+// Inline gem glyph for the Premium badge.  Matches the Figma "Diamond"
+// vector inside the badge (1452:457052 → I1452:457052;244:2277): a
+// kite-ish gem with a horizontal table cut and two facet lines drawn
+// from the top corners down to the apex. Stroked with the badge's
+// label color (`#806104`) for a unified weight.
+function IconGem({ size = 14, color = '#806104' }: { size?: number; color?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 14 14"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M3 5L4.5 1.5H9.5L11 5L7 12.5L3 5Z"
+        stroke={color}
+        strokeWidth="1"
+        strokeLinejoin="round"
+      />
+      <path d="M3 5H11" stroke={color} strokeWidth="1" strokeLinecap="round" />
+      <path
+        d="M5.5 1.5L7 5L8.5 1.5"
+        stroke={color}
+        strokeWidth="1"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// Premium pill — Figma 1452:457052.  bg WARNING/warning--tint_80
+// (#FFF3CD), 4 px padding, 4 px radius, gap-4 between gem + label,
+// label IBM Plex Sans Regular 12/18 in WARNING/warning--shade_50
+// (#806104).
+function PremiumBadge() {
+  return (
+    <span
+      className="inline-flex items-center gap-[4px] p-[4px] rounded-[4px] bg-[#FFF3CD]"
+      // `pointer-events-none` so a click anywhere on the badge still
+      // lands on the parent button (the badge is purely decorative —
+      // there's nothing distinct to click on it).
+      style={{ pointerEvents: 'none' }}
+    >
+      <IconGem size={14} color="#806104" />
+      <span className="text-[12px] leading-[18px] text-[#806104]">Premium</span>
+    </span>
+  );
 }
 
 // Each template gets the brand icon for its primary network. Cross-
@@ -96,7 +153,11 @@ function templateIcon(id: string, networks: Platform[]) {
   }
 }
 
-export function BuildNewReportSection({ templates, onSelect }: BuildNewReportSectionProps) {
+export function BuildNewReportSection({
+  templates,
+  onSelect,
+  showScratchPremiumBadge = false,
+}: BuildNewReportSectionProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   // Two flags so the back / forward chevrons can hide independently:
   // forward hides at the right edge, back hides at the left edge. Both
@@ -179,7 +240,15 @@ export function BuildNewReportSection({ templates, onSelect }: BuildNewReportSec
                     'hover:border-[#4D36FF] hover:bg-[rgba(77,54,255,0.04)]',
                   )}
                 >
-                  <IconPlus size={24} color="#201E24" />
+                  {/* Header row — Plus on the left, Premium badge on the
+                      right when surfaced (Figma 1452:457050 → "Scratch
+                      option header" uses `flex items-center
+                      justify-between` so the badge anchors flush to
+                      the right edge of the 24-px-padded card). */}
+                  <div className="flex items-center justify-between w-full">
+                    <IconPlus size={24} color="#201E24" />
+                    {showScratchPremiumBadge && <PremiumBadge />}
+                  </div>
                   <div className="flex flex-col gap-[2px] w-[175px]">
                     <span className="text-[14px] leading-[18px] font-medium text-[#201E24] tracking-[0.07px]">
                       {tpl.title}

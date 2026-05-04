@@ -37,6 +37,10 @@ interface ReportsLandingPageProps {
    *  don't need to change.  The Scenario Switcher passes a filtered
    *  subset for the "beta" template scope. */
   templates?: ReportTemplate[];
+  /** Forwarded onto `BuildNewReportSection`. Surfaces the yellow
+   *  "Premium" badge on the Start-from-scratch card — only set in the
+   *  beta-scope scenario per Figma 1452:457052. */
+  showScratchPremiumBadge?: boolean;
   /** Forwarded straight through to ReportsTable — see that component
    *  for the semantics of each. Optional so the production caller can
    *  omit them and get the existing default behavior. */
@@ -58,6 +62,7 @@ export function ReportsLandingPage({
   onDuplicate,
   onDelete,
   templates = REPORT_TEMPLATES,
+  showScratchPremiumBadge,
   searchEnabled,
   paginationEnabled,
   initialFilters,
@@ -79,7 +84,11 @@ export function ReportsLandingPage({
           the only "Reports" label sits inside the table's header
           cluster — so we don't render one here either. */}
       <main className="max-w-[1114px] mx-auto pt-[40px] pb-[80px] flex flex-col gap-[48px]">
-        <BuildNewReportSection templates={templates} onSelect={onCreate} />
+        <BuildNewReportSection
+          templates={templates}
+          onSelect={onCreate}
+          showScratchPremiumBadge={showScratchPremiumBadge}
+        />
 
         <ReportsTable
           key={scenarioKey}
