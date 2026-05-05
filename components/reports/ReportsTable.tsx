@@ -321,7 +321,11 @@ export function ReportsTable({
                       'hover:bg-[#F3F3F4] transition-colors',
                     )}
                   >
-                    <IconPlusCircle size={16} color="#201E24" />
+                    <IconPlusCircle
+                      size={16}
+                      color="#201E24"
+                      className="[&_path]:[stroke-width:1.25]"
+                    />
                     <span>Filter</span>
                   </span>
                 )}

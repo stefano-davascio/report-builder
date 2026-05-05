@@ -214,8 +214,14 @@ export function FilterDropdown({
   const handleSelectAllNetworks = () => {
     onNetworksChange(new Set(availableNetworks));
   };
+  const handleUnselectAllNetworks = () => {
+    onNetworksChange(new Set());
+  };
   const handleSelectAllUsers = () => {
     onUsersChange(new Set(availableUsers.map((u) => u.id)));
+  };
+  const handleUnselectAllUsers = () => {
+    onUsersChange(new Set());
   };
 
   // ── Top-level suggestions ────────────────────────────────────────────
@@ -324,6 +330,7 @@ export function FilterDropdown({
               selected={selectedNetworks}
               onToggle={commitNetworkToggle}
               onSelectAll={handleSelectAllNetworks}
+              onUnselectAll={handleUnselectAllNetworks}
             />
           )}
 
@@ -336,6 +343,7 @@ export function FilterDropdown({
               selected={selectedUsers}
               onToggle={commitUserToggle}
               onSelectAll={handleSelectAllUsers}
+              onUnselectAll={handleUnselectAllUsers}
             />
           )}
 
@@ -448,12 +456,12 @@ function TopPanel({
             <CategoryRow
               label="Network"
               active={activeRow === 'network'}
-              onClick={onOpenNetworks}
+              onOpen={onOpenNetworks}
             />
             <CategoryRow
               label="User"
               active={activeRow === 'user'}
-              onClick={onOpenUsers}
+              onOpen={onOpenUsers}
             />
           </>
         ) : (
@@ -490,24 +498,32 @@ function TopPanel({
 interface CategoryRowProps {
   label: string;
   active: boolean;
-  onClick: () => void;
+  /** HOVER opens the submenu (Figma 1678:75322 / 1678:76115).  Click
+   *  is also wired so keyboard / touch users can open the same
+   *  surface — both call the same handler. */
+  onOpen: () => void;
 }
 
-function CategoryRow({ label, active, onClick }: CategoryRowProps) {
+function CategoryRow({ label, active, onOpen }: CategoryRowProps) {
   return (
     <button
       type="button"
-      onClick={onClick}
+      onMouseEnter={onOpen}
+      onFocus={onOpen}
+      onClick={onOpen}
       className={cn(
         'flex items-center justify-between w-full px-[8px] py-[10px] rounded-[4px]',
         'text-[14px] leading-[17.5px] text-[#201E24]',
         'transition-colors cursor-pointer',
-        // Active = this category's submenu is open. Use a slightly
-        // stronger tint than hover so the user can see at a glance
-        // which category the visible submenu belongs to.
+        // Hover + active share the same brand-purple tint
+        // (rgba(81,61,217,0.1) — verified in Figma 1678:75513).  The
+        // category whose submenu is currently visible always paints
+        // in this color so it reads as "selected" from the user's
+        // mental model — same as hover, since hovering it would also
+        // make it the active row.
         active
-          ? 'bg-[rgba(32,30,36,0.08)]'
-          : 'hover:bg-[rgba(32,30,36,0.05)]',
+          ? 'bg-[rgba(81,61,217,0.1)]'
+          : 'hover:bg-[rgba(81,61,217,0.1)]',
       )}
     >
       <span>{label}</span>
@@ -530,7 +546,7 @@ function SuggestionRow({ onClick, leading, label }: SuggestionRowProps) {
       className={cn(
         'flex items-center gap-[8px] w-full px-[8px] py-[10px] rounded-[4px]',
         'text-[14px] leading-[17.5px] text-[#201E24] text-left',
-        'hover:bg-[rgba(32,30,36,0.05)] transition-colors cursor-pointer',
+        'hover:bg-[rgba(81,61,217,0.1)] transition-colors cursor-pointer',
       )}
     >
       {leading && <span className="flex-shrink-0">{leading}</span>}
@@ -549,6 +565,7 @@ interface NetworkSelectorProps {
   selected: ReadonlySet<Platform>;
   onToggle: (p: Platform) => void;
   onSelectAll: () => void;
+  onUnselectAll: () => void;
 }
 
 function NetworkSelector({
@@ -559,6 +576,7 @@ function NetworkSelector({
   selected,
   onToggle,
   onSelectAll,
+  onUnselectAll,
 }: NetworkSelectorProps) {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -611,7 +629,11 @@ function NetworkSelector({
         )}
       </ul>
 
-      <SelectAllFooter onClick={onSelectAll} disabled={allSelected} />
+      <SelectAllFooter
+        allSelected={allSelected}
+        onSelectAll={onSelectAll}
+        onUnselectAll={onUnselectAll}
+      />
     </div>
   );
 }
@@ -626,6 +648,7 @@ interface UserSelectorProps {
   selected: ReadonlySet<string>;
   onToggle: (id: string) => void;
   onSelectAll: () => void;
+  onUnselectAll: () => void;
 }
 
 function UserSelector({
@@ -636,6 +659,7 @@ function UserSelector({
   selected,
   onToggle,
   onSelectAll,
+  onUnselectAll,
 }: UserSelectorProps) {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -691,7 +715,11 @@ function UserSelector({
         )}
       </ul>
 
-      <SelectAllFooter onClick={onSelectAll} disabled={allSelected} />
+      <SelectAllFooter
+        allSelected={allSelected}
+        onSelectAll={onSelectAll}
+        onUnselectAll={onUnselectAll}
+      />
     </div>
   );
 }
@@ -767,21 +795,24 @@ function CheckboxRow({ checked, onClick, leading, label }: CheckboxRowProps) {
       onClick={onClick}
       className={cn(
         // Slightly tighter padding than the category rows so the list
-        // reads as denser than the parent's 2 rows. py-[8px] keeps row
-        // height at 36 px which matches Figma 696:34011 (38-px frame
-        // minus the 1-px outline that lives in the box-shadow ring).
-        'flex items-center gap-[8px] w-full px-[8px] py-[8px] rounded-[4px]',
+        // reads as denser than the parent's 2 rows. py-[10px] matches
+        // Figma 1678:75528 row spec exactly (each row ≈ 36 px tall
+        // including the 15-px checkbox).
+        'flex items-center gap-[8px] w-full px-[8px] py-[10px] rounded-[4px]',
         'text-[14px] leading-[17.5px] text-[#201E24] text-left',
-        'hover:bg-[rgba(32,30,36,0.05)] transition-colors cursor-pointer',
+        'hover:bg-[rgba(81,61,217,0.1)] transition-colors cursor-pointer',
       )}
     >
-      {/* 16-px square checkbox — Figma 696:34014.  Matches the
-          Sendible checkbox style: white bg + 1-px translucent border
-          at rest, brand-purple fill + white tick when checked. */}
+      {/* 15-px square checkbox per Figma 1678:75531: white bg +
+          inset 1-px ring (rgba(32,30,36,0.2)) at rest; brand-purple
+          fill (#4D36FF) at active with the design system's filled
+          tick glyph (NOT a stroked line — the Figma SVG asset uses
+          a solid filled path so the check has tapered ends and a
+          slight thickness variation). */}
       <span
         aria-hidden="true"
         className={cn(
-          'flex-shrink-0 w-[16px] h-[16px] rounded-[3px] flex items-center justify-center',
+          'flex-shrink-0 w-[15px] h-[15px] rounded-[3px] flex items-center justify-center',
           'transition-colors',
           checked
             ? 'bg-[#4D36FF]'
@@ -789,13 +820,22 @@ function CheckboxRow({ checked, onClick, leading, label }: CheckboxRowProps) {
         )}
       >
         {checked && (
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+          // Figma checkmark asset (verified directly via the asset
+          // URL in node 1678:75973 — `icon / _color / check`). Filled
+          // path with rounded vertices, white fill on the brand-purple
+          // background.
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            fill="none"
+            aria-hidden="true"
+          >
             <path
-              d="M1.5 5.5L4 8L8.5 2"
-              stroke="white"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              fillRule="evenodd"
+              clipRule="evenodd"
+              d="M7.71694 2.62099L3.5711 6.73891L1.94985 5.26766C1.78485 5.11807 1.53235 5.12432 1.37527 5.28141L1.37235 5.28432C1.20527 5.45141 1.20985 5.72349 1.38277 5.88432L2.98444 7.37224C3.31235 7.67682 3.82194 7.66807 4.13902 7.35266L8.30402 3.21224C8.46777 3.04974 8.46777 2.78516 8.30485 2.62182C8.14277 2.45974 7.87985 2.45932 7.71694 2.62099"
+              fill="white"
             />
           </svg>
         )}
@@ -810,30 +850,41 @@ function CheckboxRow({ checked, onClick, leading, label }: CheckboxRowProps) {
   );
 }
 
-// "Select all" footer — bottom-right of Network / User submenus, in
-// brand-purple. Figma 1678:75322 / 1678:76115 show it as a subtle
-// secondary action sitting outside the option list.
+// Select all / Unselect all footer — bottom-right of Network / User
+// submenus.  Toggle behaviour: when every option is currently
+// selected, the same button reads "Unselect all" and clears the
+// entire selection set; otherwise it reads "Select all" and adds
+// every option.  The pill chrome + hover treatment is copied from
+// the report builder's profile-selection bar (h-24 rounded-60,
+// hover bg `rgba(81,61,217,0.1)`, label #513DD9 12-px Medium) so
+// the affordance reads identically across the app.
+interface SelectAllFooterProps {
+  allSelected: boolean;
+  onSelectAll: () => void;
+  onUnselectAll: () => void;
+}
+
 function SelectAllFooter({
-  onClick,
-  disabled,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-}) {
+  allSelected,
+  onSelectAll,
+  onUnselectAll,
+}: SelectAllFooterProps) {
   return (
-    <div className="flex justify-end px-[16px] pb-[12px] pt-[4px]">
+    <div className="flex justify-end px-[8px] pb-[8px] pt-[4px]">
       <button
         type="button"
-        onClick={onClick}
-        disabled={disabled}
+        onClick={allSelected ? onUnselectAll : onSelectAll}
         className={cn(
-          'text-[12px] leading-[18px] font-medium transition-colors',
-          disabled
-            ? 'text-[rgba(77,54,255,0.5)] cursor-default'
-            : 'text-[#4D36FF] hover:text-[#3A2BCC] cursor-pointer',
+          'flex items-center h-[24px] px-[8px] py-[6px] rounded-[60px]',
+          'hover:bg-[rgba(81,61,217,0.1)] transition-colors cursor-pointer',
         )}
       >
-        Select all
+        <span
+          className="text-[12px] font-medium text-[#513DD9]"
+          style={{ lineHeight: '12px' }}
+        >
+          {allSelected ? 'Unselect all' : 'Select all'}
+        </span>
       </button>
     </div>
   );
