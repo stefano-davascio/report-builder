@@ -2,33 +2,32 @@
 
 /**
  * Filter dropdown for the Reports table — Figma 797:42255 + 1670:42280 +
- * 1674:43486 / 44025 / 42816 / 44394 / 44910.
+ * 1674:43486 / 44025 / 42816 / 44394 / 44910 + 1678:75322 + 1678:76115.
  *
- * Replaces the old drill-in category menu with a typeahead-driven filter
- * builder.  Visible surfaces and their entry points:
+ * Visual contract (re-verified against the latest Figma frames):
  *
- *   • TRIGGER (+ Filter)        → `view = 'top'`
- *       Shows a 200-px panel with a search input ("Search report…")
- *       and two category rows ("Network ›", "User ›").  Typing in
- *       the search input flips the panel into `view = 'suggestions'`
- *       which surfaces (a) any structured matches for that text +
- *       (b) a "Name contains: '<query>'" fallback row.
+ *   ┌──────────────────┐                        ┌──────────────────┐
+ *   │ [icon] Search…   │  TOP-LEVEL  →          │ [icon] Network   │  SUBMENU
+ *   ├──────────────────┤  click Network/User    ├──────────────────┤  Network/User
+ *   │ Network        › │   row drills RIGHT     │ ☑ [icon] Facebook│  search +
+ *   │ User           › │  into a 200-px sub-    │ ☐ [icon] TikTok  │  checkbox list
+ *   └──────────────────┘  selector that sits    │     …            │  + Select all
+ *                         next to the parent.   │     Select all   │  link at
+ *                                               └──────────────────┘  bottom-right
  *
- *   • Network row click          → `view = 'networks'`
- *       Promotes a 320-px sub-selector with a header "Network" search
- *       row + a checkbox list of available networks.  Picking a
- *       network checkbox is multi-select (each click toggles).
+ * Submenu placement: the parent panel STAYS VISIBLE while the user
+ * drills in.  The submenu opens to the RIGHT of the parent
+ * (`left: 100% + 4px`), aligned to the parent's top edge.  The Network /
+ * User row in the parent gets an "active" tint while its submenu is
+ * open so the user can see which category they're inside.
  *
- *   • User row click             → `view = 'users'`
- *       Same shape as Network selector but iterates `availableUsers`.
+ * Typing in the parent's search input flips the body into a
+ * suggestions list (structured matches + a trailing
+ * "Name contains: '<query>'" fallback) — that's the 1670:42280 state.
  *
- *   • Network chip click         → opens directly in `view = 'networks'`
- *   • User chip click            → opens directly in `view = 'users'`
- *   • Name-contains chip click   → opens directly in `view = 'name-edit'`
- *
- * State surfaces upward via the `*Change` callbacks; the parent
- * (`ReportsTable`) stitches them into chip rendering and report
- * filtering.
+ * The Name-contains editor (1674:44910) renders STANDALONE — no parent
+ * panel — when `view = 'name-edit'`.  This matches the chip-click
+ * editor flow.
  *
  * IMPORTANT: this component does NOT own filter state.  It's a
  * controlled view of `selectedNetworks`, `selectedUsers`, and
@@ -47,7 +46,9 @@ import { cn } from '@/lib/utils';
 export interface FilterUser {
   id: string;
   label: string;
-  /** Two-letter glyph for the trailing avatar tile. */
+  /** Two-letter glyph for the trailing avatar tile (used in chips —
+   *  per Figma 1678:76115 the User submenu list does NOT show avatars,
+   *  only the checkbox + label). */
   initials: string;
 }
 
@@ -121,8 +122,8 @@ export function FilterDropdown({
   const open = view !== null;
 
   // Search query inside the TOP-LEVEL dropdown — flips the panel into
-  // `view = 'top'` "suggestions mode" when the user starts typing.
-  // Reset whenever the dropdown closes so re-opening lands fresh.
+  // suggestion mode when the user starts typing. Reset whenever the
+  // dropdown closes so re-opening lands fresh.
   const [topQuery, setTopQuery] = useState('');
 
   // Search query inside Network / User sub-selectors — narrows the
@@ -133,6 +134,13 @@ export function FilterDropdown({
   // current `nameContains` whenever the editor opens so editing an
   // existing chip starts with its value pre-loaded.
   const [nameDraft, setNameDraft] = useState('');
+
+  // Whether the user reached the current sub-view (networks / users)
+  // by drilling in from the top panel.  When true, the parent panel
+  // stays visible alongside the submenu (1678:75322 / 1678:76115).
+  // When false, the view was opened externally — e.g. by clicking a
+  // chip — and only the submenu is shown.
+  const drilledFromTopRef = useRef(false);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const topInputRef = useRef<HTMLInputElement>(null);
@@ -161,16 +169,15 @@ export function FilterDropdown({
   }, [open, onViewChange]);
 
   // Reset query state + seed the name draft whenever the dropdown
-  // opens or the view changes.
+  // opens or the view changes.  Also clears the drill ref on close.
   useEffect(() => {
     if (!open) {
       setTopQuery('');
       setSubQuery('');
+      drilledFromTopRef.current = false;
       return;
     }
     if (view === 'top') {
-      // Focus the top search input so typing starts the typeahead
-      // immediately. requestAnimationFrame so the DOM has mounted.
       requestAnimationFrame(() => topInputRef.current?.focus());
     } else if (view === 'networks' || view === 'users') {
       requestAnimationFrame(() => subInputRef.current?.focus());
@@ -204,6 +211,13 @@ export function FilterDropdown({
     onViewChange(null);
   };
 
+  const handleSelectAllNetworks = () => {
+    onNetworksChange(new Set(availableNetworks));
+  };
+  const handleSelectAllUsers = () => {
+    onUsersChange(new Set(availableUsers.map((u) => u.id)));
+  };
+
   // ── Top-level suggestions ────────────────────────────────────────────
   // Structured matches: any network whose label includes the query
   // (case-insensitive). Plus a single trailing "Name contains: '<q>'"
@@ -226,29 +240,52 @@ export function FilterDropdown({
 
   const showSuggestions = trimmedTop.length > 0;
 
+  // The TOP panel is visible whenever `view === 'top'` OR when the
+  // user drilled into a sub-selector from the top (per Figma the
+  // parent stays visible to the LEFT of the submenu).
+  const showTopPanel =
+    view === 'top' ||
+    ((view === 'networks' || view === 'users') && drilledFromTopRef.current);
+
+  // The submenu (Network / User selector) is positioned RIGHT of the
+  // parent when drilled from top, otherwise it's a standalone popover
+  // anchored to the trigger.
+  const showSubmenuRightOfTop =
+    (view === 'networks' || view === 'users') && drilledFromTopRef.current;
+
   return (
-    <div ref={rootRef} className="relative inline-flex" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>
+    <div
+      ref={rootRef}
+      className="relative inline-flex"
+      style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
+    >
       <button
         type="button"
-        onClick={() => onViewChange(open ? null : 'top')}
+        onClick={() => {
+          drilledFromTopRef.current = false;
+          onViewChange(open ? null : 'top');
+        }}
         className="inline-flex items-center"
       >
         {renderTrigger?.(open)}
       </button>
 
       {open && (
-        <div
-          className="absolute z-30 left-0 top-[calc(100%+4px)]"
-          // The dropdown panel itself; surfaces are conditionally
-          // rendered inside.
-        >
-          {view === 'top' && (
+        <div className="absolute z-30 left-0 top-[calc(100%+4px)] flex items-start gap-[4px]">
+          {showTopPanel && (
             <TopPanel
               query={topQuery}
               onQueryChange={setTopQuery}
               showSuggestions={showSuggestions}
               networkSuggestions={networkSuggestions}
               userSuggestions={userSuggestions}
+              activeRow={
+                view === 'networks'
+                  ? 'network'
+                  : view === 'users'
+                    ? 'user'
+                    : null
+              }
               inputRef={topInputRef}
               onPickNetwork={(p) => {
                 commitNetworkToggle(p);
@@ -262,11 +299,22 @@ export function FilterDropdown({
                 onNameContainsChange(trimmedTop);
                 onViewChange(null);
               }}
-              onOpenNetworks={() => onViewChange('networks')}
-              onOpenUsers={() => onViewChange('users')}
+              onOpenNetworks={() => {
+                drilledFromTopRef.current = true;
+                onViewChange('networks');
+              }}
+              onOpenUsers={() => {
+                drilledFromTopRef.current = true;
+                onViewChange('users');
+              }}
             />
           )}
 
+          {/* Sub-selectors:
+              • In drill mode (`showSubmenuRightOfTop`) they sit to the
+                right of the parent, gap-4 between.
+              • Otherwise (chip-click entry) they stand alone in the
+                same anchor slot. */}
           {view === 'networks' && (
             <NetworkSelector
               query={subQuery}
@@ -275,6 +323,7 @@ export function FilterDropdown({
               available={availableNetworks}
               selected={selectedNetworks}
               onToggle={commitNetworkToggle}
+              onSelectAll={handleSelectAllNetworks}
             />
           )}
 
@@ -286,10 +335,11 @@ export function FilterDropdown({
               available={availableUsers}
               selected={selectedUsers}
               onToggle={commitUserToggle}
+              onSelectAll={handleSelectAllUsers}
             />
           )}
 
-          {view === 'name-edit' && (
+          {view === 'name-edit' && !showSubmenuRightOfTop && (
             <NameContainsEditor
               draft={nameDraft}
               onDraftChange={setNameDraft}
@@ -305,13 +355,30 @@ export function FilterDropdown({
 
 // ── Sub-views ────────────────────────────────────────────────────────────
 
-// Shared 200-px panel chrome (Figma 696:33981) — white bg, rounded-4,
-// 1-px outline ring + soft drop shadow.
-const PANEL_CHROME = cn(
-  'bg-white rounded-[4px] overflow-hidden',
-);
+// Shared panel chrome — Figma 696:33981.  White bg, rounded-4, 1-px
+// translucent outline ring + soft drop shadow.
+const PANEL_CHROME = 'bg-white rounded-[4px] overflow-hidden';
 const PANEL_SHADOW =
   '0 0 0 1px #D2D2D3, 0 12px 8px -4px rgba(32,30,36,0.15), 0 4px 4px -2px rgba(32,30,36,0.2)';
+
+// Search-input chrome shared across every panel.  Subtle 5%-tinted
+// fill, 32-px tall, rounded-4 — matches the Figma 'Input' component.
+const SEARCH_INPUT_WRAP = cn(
+  'flex items-center gap-[8px] h-[32px] px-[8px] rounded-[4px]',
+  'bg-[rgba(32,30,36,0.05)]',
+  // Subtle 1-px focus ring inside the existing chrome — keeps the
+  // input visually grounded when the user clicks it without ever
+  // expanding the box (matches the Figma "input focused" treatment
+  // of the search field).
+  'focus-within:bg-[rgba(32,30,36,0.08)] transition-colors',
+);
+const SEARCH_INPUT_FIELD = cn(
+  'flex-1 min-w-0 bg-transparent border-0 outline-none',
+  'text-[14px] leading-[14px] tracking-[-0.1px]',
+  'text-[#201E24] placeholder:text-[#78767C]',
+);
+
+// ── Top panel ───────────────────────────────────────────────────────────
 
 interface TopPanelProps {
   query: string;
@@ -319,6 +386,7 @@ interface TopPanelProps {
   showSuggestions: boolean;
   networkSuggestions: Platform[];
   userSuggestions: FilterUser[];
+  activeRow: 'network' | 'user' | null;
   inputRef: React.RefObject<HTMLInputElement | null>;
   onPickNetwork: (p: Platform) => void;
   onPickUser: (id: string) => void;
@@ -333,6 +401,7 @@ function TopPanel({
   showSuggestions,
   networkSuggestions,
   userSuggestions,
+  activeRow,
   inputRef,
   onPickNetwork,
   onPickUser,
@@ -342,19 +411,13 @@ function TopPanel({
 }: TopPanelProps) {
   return (
     <div
-      className={cn(PANEL_CHROME, 'w-[260px] flex flex-col')}
+      className={cn(PANEL_CHROME, 'w-[200px] flex flex-col')}
       style={{ boxShadow: PANEL_SHADOW }}
     >
-      {/* Search input — Figma's icon-leading input pattern, no
-          underline, soft gray fill. Pressing Enter with text typed
-          commits a Name contains filter (Acceptance criteria #8). */}
+      {/* Search input — Figma 696:33983. Pressing Enter with text
+          typed commits a Name contains filter immediately. */}
       <div className="p-[8px]">
-        <div
-          className={cn(
-            'flex items-center gap-[8px] h-[32px] px-[8px] rounded-[4px]',
-            'bg-[rgba(32,30,36,0.05)]',
-          )}
-        >
+        <div className={SEARCH_INPUT_WRAP}>
           <IconSearch size={16} color="#201E24" />
           <input
             ref={inputRef}
@@ -369,22 +432,29 @@ function TopPanel({
             }}
             placeholder="Search report..."
             aria-label="Search filters"
-            className={cn(
-              'flex-1 min-w-0 bg-transparent border-0 outline-none',
-              'text-[14px] leading-[14px] tracking-[-0.1px]',
-              'text-[#201E24] placeholder:text-[#78767C]',
-            )}
+            className={SEARCH_INPUT_FIELD}
           />
         </div>
       </div>
 
       {/* Body — either the two category rows OR a suggestions list,
-          depending on whether the user is typing. */}
+          depending on whether the user is typing.
+          NOTE: pt-0 to keep the gap between search and rows tight
+          (Figma rhythm: 8 px outer padding, no extra space between
+          input and first row). */}
       <div className="flex flex-col p-[8px] pt-0 max-h-[400px] overflow-auto">
         {!showSuggestions ? (
           <>
-            <CategoryRow label="Network" onClick={onOpenNetworks} />
-            <CategoryRow label="User" onClick={onOpenUsers} />
+            <CategoryRow
+              label="Network"
+              active={activeRow === 'network'}
+              onClick={onOpenNetworks}
+            />
+            <CategoryRow
+              label="User"
+              active={activeRow === 'user'}
+              onClick={onOpenUsers}
+            />
           </>
         ) : (
           <>
@@ -400,13 +470,12 @@ function TopPanel({
               <SuggestionRow
                 key={`usr-${u.id}`}
                 onClick={() => onPickUser(u.id)}
-                leading={<UserAvatar initials={u.initials} size={16} />}
                 label={`User > ${u.label}`}
               />
             ))}
             {/* Always-present fallback — Figma 1670:42280 shows it as
                 the last row whenever the user has typed anything.
-                Phrasing is exactly per the spec: 'Name contains: "fa"'. */}
+                Phrasing per spec: 'Name contains: "fa"'. */}
             <SuggestionRow
               onClick={onPickNameContains}
               label={`Name contains: "${query.trim()}"`}
@@ -420,10 +489,11 @@ function TopPanel({
 
 interface CategoryRowProps {
   label: string;
+  active: boolean;
   onClick: () => void;
 }
 
-function CategoryRow({ label, onClick }: CategoryRowProps) {
+function CategoryRow({ label, active, onClick }: CategoryRowProps) {
   return (
     <button
       type="button"
@@ -431,7 +501,13 @@ function CategoryRow({ label, onClick }: CategoryRowProps) {
       className={cn(
         'flex items-center justify-between w-full px-[8px] py-[10px] rounded-[4px]',
         'text-[14px] leading-[17.5px] text-[#201E24]',
-        'hover:bg-[rgba(32,30,36,0.05)] transition-colors cursor-pointer',
+        'transition-colors cursor-pointer',
+        // Active = this category's submenu is open. Use a slightly
+        // stronger tint than hover so the user can see at a glance
+        // which category the visible submenu belongs to.
+        active
+          ? 'bg-[rgba(32,30,36,0.08)]'
+          : 'hover:bg-[rgba(32,30,36,0.05)]',
       )}
     >
       <span>{label}</span>
@@ -472,6 +548,7 @@ interface NetworkSelectorProps {
   available: Platform[];
   selected: ReadonlySet<Platform>;
   onToggle: (p: Platform) => void;
+  onSelectAll: () => void;
 }
 
 function NetworkSelector({
@@ -481,6 +558,7 @@ function NetworkSelector({
   available,
   selected,
   onToggle,
+  onSelectAll,
 }: NetworkSelectorProps) {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -488,21 +566,16 @@ function NetworkSelector({
     return available.filter((p) => NETWORK_LABEL[p].toLowerCase().includes(q));
   }, [query, available]);
 
+  const allSelected =
+    available.length > 0 && available.every((p) => selected.has(p));
+
   return (
     <div
       className={cn(PANEL_CHROME, 'w-[200px] flex flex-col')}
       style={{ boxShadow: PANEL_SHADOW }}
     >
-      {/* Header search — Figma 696:34004: 56-px frame, search icon
-          leading, "Network" placeholder. Smaller than 320-px in the
-          design but tightened to 200 to match the trigger width. */}
-      <div className="border-b border-[#D2D2D3] p-[8px]">
-        <div
-          className={cn(
-            'flex items-center gap-[8px] h-[32px] px-[8px] rounded-[4px]',
-            'bg-[rgba(32,30,36,0.05)]',
-          )}
-        >
+      <div className="p-[8px]">
+        <div className={SEARCH_INPUT_WRAP}>
           <IconSearch size={16} color="#201E24" />
           <input
             ref={inputRef}
@@ -511,11 +584,7 @@ function NetworkSelector({
             onChange={(e) => onQueryChange(e.target.value)}
             placeholder="Network"
             aria-label="Search networks"
-            className={cn(
-              'flex-1 min-w-0 bg-transparent border-0 outline-none',
-              'text-[14px] leading-[14px] tracking-[-0.1px]',
-              'text-[#201E24] placeholder:text-[#78767C]',
-            )}
+            className={SEARCH_INPUT_FIELD}
           />
         </div>
       </div>
@@ -523,7 +592,7 @@ function NetworkSelector({
       <ul
         role="listbox"
         aria-label="Networks"
-        className="flex flex-col p-[8px] max-h-[360px] overflow-auto"
+        className="flex flex-col px-[8px] pb-[4px] max-h-[320px] overflow-auto"
       >
         {filtered.map((p) => (
           <li key={p}>
@@ -541,6 +610,8 @@ function NetworkSelector({
           </li>
         )}
       </ul>
+
+      <SelectAllFooter onClick={onSelectAll} disabled={allSelected} />
     </div>
   );
 }
@@ -554,6 +625,7 @@ interface UserSelectorProps {
   available: FilterUser[];
   selected: ReadonlySet<string>;
   onToggle: (id: string) => void;
+  onSelectAll: () => void;
 }
 
 function UserSelector({
@@ -563,6 +635,7 @@ function UserSelector({
   available,
   selected,
   onToggle,
+  onSelectAll,
 }: UserSelectorProps) {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -570,18 +643,16 @@ function UserSelector({
     return available.filter((u) => u.label.toLowerCase().includes(q));
   }, [query, available]);
 
+  const allSelected =
+    available.length > 0 && available.every((u) => selected.has(u.id));
+
   return (
     <div
       className={cn(PANEL_CHROME, 'w-[200px] flex flex-col')}
       style={{ boxShadow: PANEL_SHADOW }}
     >
-      <div className="border-b border-[#D2D2D3] p-[8px]">
-        <div
-          className={cn(
-            'flex items-center gap-[8px] h-[32px] px-[8px] rounded-[4px]',
-            'bg-[rgba(32,30,36,0.05)]',
-          )}
-        >
+      <div className="p-[8px]">
+        <div className={SEARCH_INPUT_WRAP}>
           <IconSearch size={16} color="#201E24" />
           <input
             ref={inputRef}
@@ -590,26 +661,25 @@ function UserSelector({
             onChange={(e) => onQueryChange(e.target.value)}
             placeholder="User"
             aria-label="Search users"
-            className={cn(
-              'flex-1 min-w-0 bg-transparent border-0 outline-none',
-              'text-[14px] leading-[14px] tracking-[-0.1px]',
-              'text-[#201E24] placeholder:text-[#78767C]',
-            )}
+            className={SEARCH_INPUT_FIELD}
           />
         </div>
       </div>
 
+      {/* Per Figma 1678:76115, User rows show ONLY the checkbox +
+          label (no avatar tile). The same component is used for the
+          chip popover — chips already convey the user identity, the
+          submenu just confirms / edits the selection. */}
       <ul
         role="listbox"
         aria-label="Users"
-        className="flex flex-col p-[8px] max-h-[360px] overflow-auto"
+        className="flex flex-col px-[8px] pb-[4px] max-h-[320px] overflow-auto"
       >
         {filtered.map((u) => (
           <li key={u.id}>
             <CheckboxRow
               checked={selected.has(u.id)}
               onClick={() => onToggle(u.id)}
-              leading={<UserAvatar initials={u.initials} size={16} />}
               label={u.label}
             />
           </li>
@@ -620,6 +690,8 @@ function UserSelector({
           </li>
         )}
       </ul>
+
+      <SelectAllFooter onClick={onSelectAll} disabled={allSelected} />
     </div>
   );
 }
@@ -645,12 +717,7 @@ function NameContainsEditor({
       style={{ boxShadow: PANEL_SHADOW }}
     >
       <div className="p-[8px]">
-        <div
-          className={cn(
-            'flex items-center gap-[8px] h-[32px] px-[8px] rounded-[4px]',
-            'bg-[rgba(32,30,36,0.05)]',
-          )}
-        >
+        <div className={SEARCH_INPUT_WRAP}>
           <IconSearch size={16} color="#201E24" />
           <input
             ref={inputRef}
@@ -665,11 +732,7 @@ function NameContainsEditor({
             }}
             placeholder="Name contains"
             aria-label="Edit name contains filter"
-            className={cn(
-              'flex-1 min-w-0 bg-transparent border-0 outline-none',
-              'text-[14px] leading-[14px] tracking-[-0.1px]',
-              'text-[#201E24] placeholder:text-[#78767C]',
-            )}
+            className={SEARCH_INPUT_FIELD}
           />
         </div>
       </div>
@@ -703,18 +766,23 @@ function CheckboxRow({ checked, onClick, leading, label }: CheckboxRowProps) {
       aria-selected={checked}
       onClick={onClick}
       className={cn(
-        'flex items-center gap-[8px] w-full px-[8px] py-[10px] rounded-[4px]',
+        // Slightly tighter padding than the category rows so the list
+        // reads as denser than the parent's 2 rows. py-[8px] keeps row
+        // height at 36 px which matches Figma 696:34011 (38-px frame
+        // minus the 1-px outline that lives in the box-shadow ring).
+        'flex items-center gap-[8px] w-full px-[8px] py-[8px] rounded-[4px]',
         'text-[14px] leading-[17.5px] text-[#201E24] text-left',
         'hover:bg-[rgba(32,30,36,0.05)] transition-colors cursor-pointer',
       )}
     >
-      {/* 15-px square checkbox per Figma 696:34014. Manual styling so
-          we can mirror the design's translucent inner-shadow border at
-          rest and brand-purple fill when checked. */}
+      {/* 16-px square checkbox — Figma 696:34014.  Matches the
+          Sendible checkbox style: white bg + 1-px translucent border
+          at rest, brand-purple fill + white tick when checked. */}
       <span
         aria-hidden="true"
         className={cn(
-          'flex-shrink-0 w-[15px] h-[15px] rounded-[4px] flex items-center justify-center',
+          'flex-shrink-0 w-[16px] h-[16px] rounded-[3px] flex items-center justify-center',
+          'transition-colors',
           checked
             ? 'bg-[#4D36FF]'
             : 'bg-white shadow-[inset_0_0_0_1px_rgba(32,30,36,0.2)]',
@@ -732,30 +800,41 @@ function CheckboxRow({ checked, onClick, leading, label }: CheckboxRowProps) {
           </svg>
         )}
       </span>
-      {leading && <span className="flex-shrink-0">{leading}</span>}
+      {leading && (
+        <span className="flex-shrink-0 inline-flex items-center justify-center">
+          {leading}
+        </span>
+      )}
       <span className="truncate">{label}</span>
     </button>
   );
 }
 
-// Tiny avatar tile for User rows / suggestions.  Two-letter initials
-// over a #4D36FF brand-purple square — we don't have first-class user
-// avatars in the demo data so a tinted initial reads well at 16-px
-// without needing real assets.
-function UserAvatar({ initials, size }: { initials: string; size: number }) {
+// "Select all" footer — bottom-right of Network / User submenus, in
+// brand-purple. Figma 1678:75322 / 1678:76115 show it as a subtle
+// secondary action sitting outside the option list.
+function SelectAllFooter({
+  onClick,
+  disabled,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+}) {
   return (
-    <span
-      aria-hidden="true"
-      className="rounded-[3px] bg-[#4D36FF] flex items-center justify-center text-white"
-      style={{
-        width: size,
-        height: size,
-        fontSize: size * 0.55,
-        lineHeight: 1,
-        fontWeight: 600,
-      }}
-    >
-      {initials.slice(0, 2).toUpperCase()}
-    </span>
+    <div className="flex justify-end px-[16px] pb-[12px] pt-[4px]">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        className={cn(
+          'text-[12px] leading-[18px] font-medium transition-colors',
+          disabled
+            ? 'text-[rgba(77,54,255,0.5)] cursor-default'
+            : 'text-[#4D36FF] hover:text-[#3A2BCC] cursor-pointer',
+        )}
+      >
+        Select all
+      </button>
+    </div>
   );
 }

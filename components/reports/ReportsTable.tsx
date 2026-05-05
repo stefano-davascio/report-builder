@@ -46,14 +46,17 @@ import {
 } from '@/components/icons/SendiIcons';
 import { cn } from '@/lib/utils';
 
-// Default user options for the User filter — mirrors the previous
-// FILTER_OPTIONS 'usr-me' / 'usr-team' rows. Lives here so the
-// FilterDropdown stays decoupled from the production reports module
-// catalog. Demo-only — no actual user-filter wiring against reports
-// data exists today.
+// Default user options for the User filter — Figma 1678:76115 lists
+// six fictional teammates by full name (no avatars in the row, just
+// checkbox + label).  Demo-only: no actual user-filter wiring against
+// reports data exists today.
 const DEFAULT_AVAILABLE_USERS: FilterUser[] = [
-  { id: 'usr-me',   label: 'Me',           initials: 'ME' },
-  { id: 'usr-team', label: 'Team members', initials: 'TM' },
+  { id: 'usr-cs', label: 'Connie Searson',    initials: 'CS' },
+  { id: 'usr-nw', label: 'Nico Watson',       initials: 'NW' },
+  { id: 'usr-eo', label: 'Emmanuel Oshowobi', initials: 'EO' },
+  { id: 'usr-hm', label: 'Heather Martoglio', initials: 'HM' },
+  { id: 'usr-ab', label: 'Ann Borbolla',      initials: 'AB' },
+  { id: 'usr-an', label: 'Anthony Benavides', initials: 'AB' },
 ];
 
 // Default visible network set for the filter when no scope override
