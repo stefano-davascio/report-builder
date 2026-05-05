@@ -216,12 +216,15 @@ export const INITIAL_REPORTS: MockReport[] = [
   },
   {
     id: 'report-3',
-    name: 'Cross-platform summary',
-    // "1 day ago" — five modules, multi-network with overflow chip
+    name: 'TikTok performance',
+    // "1 day ago"
     modifiedAt: isoDaysAgo(1, 0),
-    modules: presetCrossPlatform().slice(0, 5),
-    networks: ['facebook', 'instagram', 'bluesky', 'linkedin'],
-    selectedProfileIds: ['fb-1', 'ig-1', 'li-1'],
+    modules: presetTikTokOnly(),
+    networks: ['tiktok'],
+    // No TikTok profiles authored on the demo account, so the row
+    // ships with an empty selection — the production builder accepts
+    // this and lets the user pick profiles inside the editor.
+    selectedProfileIds: [],
   },
 ];
 
