@@ -32,6 +32,7 @@ import {
 import { useScenario } from '@/lib/scenario';
 import {
   reportsForScenario,
+  scopeFilterReports,
   templatesForScope,
 } from '@/lib/scenario-data';
 import { uid } from '@/lib/utils';
@@ -101,12 +102,24 @@ export default function Home() {
   // so designers can review specific list states without authoring
   // 25 reports by hand.
   const scenarioRender = useMemo(() => {
-    const preset = reportsForScenario(scenario.reportListState);
+    const preset = reportsForScenario(
+      scenario.reportListState,
+      scenario.templateScope,
+    );
     if (scenario.reportListState === 'few') {
-      return { ...preset, reports };
+      // The "few" scenario shows the LIVE production reports list so
+      // create/delete/rename actions are reflected in real time. The
+      // canned `preset.reports` is ignored here, but we still pipe
+      // the live list through `scopeFilterReports` so a Beta-scoped
+      // few view only paints Facebook/TikTok glyphs — same rule the
+      // canned datasets get inside `reportsForScenario`.
+      return {
+        ...preset,
+        reports: scopeFilterReports(reports, scenario.templateScope),
+      };
     }
     return preset;
-  }, [scenario.reportListState, reports]);
+  }, [scenario.reportListState, scenario.templateScope, reports]);
 
   // ── Landing → Builder transitions ─────────────────────────────────────────
 

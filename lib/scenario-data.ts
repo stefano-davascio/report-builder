@@ -217,21 +217,87 @@ const MANY_REPORTS: MockReport[] = MANY_REPORT_NAMES.map((name, i) => {
 const FILTERED_REPORTS: MockReport[] = MANY_REPORTS;
 
 /**
- * Filter ids that come pre-selected in the "filtered" scenario.  Maps
- * to the ids in `FILTER_OPTIONS` (lib/reports-data.ts) — Instagram is
- * a network with a healthy chunk of `MANY_REPORTS` matches, so the
- * filtered view paints with a plausible non-zero result count.
+ * Filter ids that come pre-selected in the "filtered" scenario.  Must
+ * map to a real entry in `FILTER_OPTIONS` (lib/reports-data.ts) — and
+ * to a network that's permitted under BOTH the Full and Beta template
+ * scopes, so the chip survives a Beta-launch render with a non-empty
+ * result.  Facebook satisfies both: it has many matches in MANY_REPORTS
+ * and is one of the two beta-supported networks alongside TikTok.
  */
 export const FILTERED_INITIAL_FILTER_IDS: ReadonlySet<string> = new Set([
-  'instagram',
+  'net-fb',
 ]);
 
 /**
- * The single source of truth that maps a `reportListState` onto the
- * data + chrome the landing page should render. Returning a struct
- * (not just an array) keeps the chrome flags adjacent to the data
- * they describe — easy to extend with future scenarios without
- * touching every consumer.
+ * Hard cap on the number of rows the "many" / "filtered" scenarios
+ * surface.  We generate 99 rows up front (more = better synthetic
+ * variety, since the names + network rotation patterns repeat every
+ * few dozen entries) but slice to this number when handing off to the
+ * UI so the visible scenario reads as a believable real-world account.
+ */
+const MANY_VISIBLE_LIMIT = 50;
+
+/**
+ * Networks permitted under each template scope.  When the scope is
+ * 'full' we don't restrict — the report list paints with whatever
+ * network glyphs each row was authored with.  When the scope is
+ * 'beta' the only platforms in scope are Facebook + TikTok (matches
+ * the Build-a-new-report carousel's beta filter — see
+ * `BETA_TEMPLATE_IDS` above).  Returning `null` for the unrestricted
+ * case lets callers short-circuit the per-row filter loop.
+ */
+const BETA_NETWORKS: ReadonlySet<Platform> = new Set(['facebook', 'tiktok']);
+
+function allowedNetworksForScope(scope: TemplateScope): ReadonlySet<Platform> | null {
+  return scope === 'beta' ? BETA_NETWORKS : null;
+}
+
+/**
+ * Apply network-scope filtering to a list of reports:
+ *   • For each row, intersect its `networks` array with the allowed
+ *     set so the icon stack only paints in-scope glyphs.
+ *   • Drop rows that have ZERO allowed networks left — a row with an
+ *     empty Networks column would read as broken.
+ *
+ * Callers pass `null` for the unrestricted (full-scope) case; we
+ * return the source list untouched so there's no allocation overhead
+ * for the production code path.
+ */
+function applyNetworkScope(
+  reports: MockReport[],
+  allowed: ReadonlySet<Platform> | null,
+): MockReport[] {
+  if (allowed === null) return reports;
+  const out: MockReport[] = [];
+  for (const r of reports) {
+    const networks = r.networks.filter((n) => allowed.has(n));
+    if (networks.length === 0) continue;
+    out.push({ ...r, networks });
+  }
+  return out;
+}
+
+/**
+ * Public wrapper: apply the template scope to an arbitrary report
+ * list.  Used by `app/page.tsx` to scope the LIVE production reports
+ * state in the "few" scenario (where the rendered list is the user's
+ * actual `reports` array, not a canned dataset).  Mirrors the same
+ * filter `reportsForScenario` runs internally, so the few scenario
+ * gets the same Beta-network treatment as many / filtered.
+ */
+export function scopeFilterReports(
+  reports: MockReport[],
+  scope: TemplateScope,
+): MockReport[] {
+  return applyNetworkScope(reports, allowedNetworksForScope(scope));
+}
+
+/**
+ * The single source of truth that maps a `reportListState` (× the
+ * current `TemplateScope`) onto the data + chrome the landing page
+ * should render. Returning a struct (not just an array) keeps the
+ * chrome flags adjacent to the data they describe — easy to extend
+ * with future scenarios without touching every consumer.
  */
 export interface ReportsScenarioRender {
   /** Rows the table should render. */
@@ -245,17 +311,31 @@ export interface ReportsScenarioRender {
   initialFilters?: ReadonlySet<string>;
 }
 
-export function reportsForScenario(state: ReportListState): ReportsScenarioRender {
+export function reportsForScenario(
+  state: ReportListState,
+  scope: TemplateScope,
+): ReportsScenarioRender {
+  // Compute the allowed network set ONCE per render — every case
+  // below funnels its dataset through the same filter, and re-running
+  // the lookup per case would just be noise.
+  const allowed = allowedNetworksForScope(scope);
   switch (state) {
     case 'empty':
       return { reports: [], filterEnabled: false };
     case 'few':
-      return { reports: FEW_REPORTS, filterEnabled: false };
+      return { reports: applyNetworkScope(FEW_REPORTS, allowed), filterEnabled: false };
     case 'many':
-      return { reports: MANY_REPORTS, filterEnabled: true };
+      // Apply scope FIRST, then cap.  Doing it the other way around
+      // (cap → scope) means a beta-scoped many could end up with far
+      // fewer than 50 visible rows when the first 50 of MANY_REPORTS
+      // happen to skew toward non-beta networks.
+      return {
+        reports: applyNetworkScope(MANY_REPORTS, allowed).slice(0, MANY_VISIBLE_LIMIT),
+        filterEnabled: true,
+      };
     case 'filtered':
       return {
-        reports: FILTERED_REPORTS,
+        reports: applyNetworkScope(FILTERED_REPORTS, allowed).slice(0, MANY_VISIBLE_LIMIT),
         filterEnabled: true,
         initialFilters: FILTERED_INITIAL_FILTER_IDS,
       };
