@@ -24,9 +24,15 @@
  */
 
 import { useMemo, useState } from 'react';
-import { MockReport, FILTER_OPTIONS } from '@/lib/reports-data';
+import { MockReport } from '@/lib/reports-data';
 import type { ScenarioFeatures } from '@/lib/scenario';
-import { FilterDropdown } from './FilterDropdown';
+import type { Platform } from '@/types';
+import {
+  FilterDropdown,
+  type FilterDropdownView,
+  type FilterUser,
+} from './FilterDropdown';
+import { PlatformIcon } from '@/components/report/PlatformIcon';
 import { ReportRow, REPORT_ROW_COLUMNS } from './ReportRow';
 import { EmptyState } from './EmptyState';
 import { ReportAction } from './ActionMenu';
@@ -40,6 +46,38 @@ import {
 } from '@/components/icons/SendiIcons';
 import { cn } from '@/lib/utils';
 
+// Default user options for the User filter — mirrors the previous
+// FILTER_OPTIONS 'usr-me' / 'usr-team' rows. Lives here so the
+// FilterDropdown stays decoupled from the production reports module
+// catalog. Demo-only — no actual user-filter wiring against reports
+// data exists today.
+const DEFAULT_AVAILABLE_USERS: FilterUser[] = [
+  { id: 'usr-me',   label: 'Me',           initials: 'ME' },
+  { id: 'usr-team', label: 'Team members', initials: 'TM' },
+];
+
+// Default visible network set for the filter when no scope override
+// is supplied. Order mirrors Figma's network sub-selector list (the
+// 6 mainstream networks from 1674:44025).
+const DEFAULT_AVAILABLE_NETWORKS: Platform[] = [
+  'facebook',
+  'instagram',
+  'linkedin',
+  'tiktok',
+  'x',
+  'youtube',
+];
+
+/** Pre-applied filter shape — used by the Scenario Switcher's
+ *  "filtered" preset to mount the table with a chip already active.
+ *  Each field optional so a scenario can pre-select just one
+ *  dimension without having to author empty values for the others. */
+export interface InitialFilters {
+  networks?: Platform[];
+  users?: string[];
+  nameContains?: string;
+}
+
 interface ReportsTableProps {
   reports: MockReport[];
   onOpen: (report: MockReport) => void;
@@ -52,11 +90,15 @@ interface ReportsTableProps {
    *  doesn't earn its pixels (3 rows fit on one screen, so the user
    *  scans rather than narrows). */
   filterEnabled?: boolean;
-  /** Filter chip ids to start with selected.  Used by the
-   *  Scenario Switcher's "filtered" preset so the table mounts with a
-   *  pre-applied filter chip + reduced result set, without forcing the
-   *  parent to reach into the table's internal state. */
-  initialFilters?: ReadonlySet<string>;
+  /** Pre-applied filter state.  Used by the Scenario Switcher's
+   *  "filtered" preset so the table mounts with a chip already
+   *  active, without forcing the parent to reach into the table's
+   *  internal state. */
+  initialFilters?: InitialFilters;
+  /** Networks that the Filter dropdown's Network sub-selector can
+   *  pick from.  Beta scope passes ['facebook', 'tiktok'] only;
+   *  Full scope passes the full mainstream network set. */
+  availableNetworks?: Platform[];
   /** Capability flags for in-development surfaces. Defaults to all
    *  OFF — production scope hides Rename and Sorting. */
   features?: ScenarioFeatures;
@@ -90,17 +132,31 @@ export function ReportsTable({
   onDelete,
   filterEnabled = false,
   initialFilters,
+  availableNetworks = DEFAULT_AVAILABLE_NETWORKS,
   features = FEATURES_DEFAULT,
 }: ReportsTableProps) {
-  // Selected-filter state seeds from `initialFilters` so the
-  // Scenario Switcher's "filtered" preset can mount with chips already
-  // applied.  We deliberately don't sync to subsequent `initialFilters`
-  // changes — once the user has picked their own chips the seed shouldn't
-  // overwrite them. The `key={reportListState}` on this component upstream
-  // takes care of remounting with a fresh seed when the scenario changes.
-  const [selectedFilters, setSelectedFilters] = useState<Set<string>>(
-    () => new Set(initialFilters ?? []),
+  // Filter state — three independent dimensions per Figma 797:42255.
+  // Seeded from `initialFilters` so the Scenario Switcher's "filtered"
+  // preset can mount with one or more chips already applied. We
+  // deliberately don't sync to subsequent `initialFilters` changes —
+  // once the user has picked their own chips the seed shouldn't
+  // overwrite them. The `key={reportListState}` on this component
+  // upstream takes care of remounting with a fresh seed when the
+  // scenario changes.
+  const [selectedNetworks, setSelectedNetworks] = useState<Set<Platform>>(
+    () => new Set(initialFilters?.networks ?? []),
   );
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(
+    () => new Set(initialFilters?.users ?? []),
+  );
+  const [nameContains, setNameContains] = useState<string | null>(
+    () => initialFilters?.nameContains ?? null,
+  );
+
+  // Filter dropdown view state. `null` means closed. The Filter
+  // trigger and chip clicks all flip this to a specific view value;
+  // outside-click + Escape inside FilterDropdown flip it back to null.
+  const [filterView, setFilterView] = useState<FilterDropdownView | null>(null);
   // Initial sort intentionally has NO active key — every column should
   // render with the neutral `IconSortUpDown` glyph until the user
   // clicks one. The mock data is already in modifiedAt-desc order at
@@ -118,26 +174,24 @@ export function ReportsTable({
   const [pendingDelete, setPendingDelete] = useState<MockReport | null>(null);
 
   // ── Filtering ────────────────────────────────────────────────────────────
-  // Only the Network category has data wiring today; the other category
-  // selections render as chips but no-op against the data — preserves the
-  // affordance end-to-end so the Figma drill-in pattern reads the same.
+  // Three filter dimensions, applied in series:
+  //   1. Networks  — row passes if any of its `networks` is selected.
+  //   2. Name      — case-insensitive substring match against `name`.
+  //   3. Users     — chip-only for now (no wiring against report data
+  //                  in the demo, since reports aren't authored against
+  //                  a `user` axis). The chip still renders so the UX
+  //                  flow reads end-to-end.
   const filtered = useMemo(() => {
     let rows = reports;
-    if (selectedFilters.size > 0) {
-      const selectedNetworks = new Set<string>();
-      for (const id of selectedFilters) {
-        const opt = FILTER_OPTIONS.find((o) => o.id === id);
-        if (!opt || opt.category !== 'Network') continue;
-        selectedNetworks.add(opt.label.toLowerCase());
-      }
-      if (selectedNetworks.size > 0) {
-        rows = rows.filter((r) =>
-          r.networks.some((n) => selectedNetworks.has(n)),
-        );
-      }
+    if (selectedNetworks.size > 0) {
+      rows = rows.filter((r) => r.networks.some((n) => selectedNetworks.has(n)));
+    }
+    if (nameContains && nameContains.trim().length > 0) {
+      const q = nameContains.trim().toLowerCase();
+      rows = rows.filter((r) => r.name.toLowerCase().includes(q));
     }
     return rows;
-  }, [reports, selectedFilters]);
+  }, [reports, selectedNetworks, nameContains]);
 
   // ── Sorting ──────────────────────────────────────────────────────────────
   // Sort math runs unconditionally (cheap on hundreds of rows); the
@@ -174,18 +228,17 @@ export function ReportsTable({
   // the "No matches" copy, not "No reports yet".
   const isSourceEmpty = reports.length === 0;
 
-  // ── Selected filter chips ────────────────────────────────────────────────
-  const chips = [...selectedFilters]
-    .map((id) => FILTER_OPTIONS.find((o) => o.id === id))
-    .filter((o): o is (typeof FILTER_OPTIONS)[number] => Boolean(o));
+  // ── Active-filter helpers ────────────────────────────────────────────────
+  const hasAnyFilter =
+    selectedNetworks.size > 0 ||
+    selectedUsers.size > 0 ||
+    (nameContains !== null && nameContains.length > 0);
 
-  const toggleFilter = (id: string) => {
-    setSelectedFilters((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const clearAllFilters = () => {
+    setSelectedNetworks(new Set());
+    setSelectedUsers(new Set());
+    setNameContains(null);
+    setFilterView(null);
   };
 
   const handleAction = (report: MockReport, action: ReportAction) => {
@@ -238,20 +291,23 @@ export function ReportsTable({
               Reports
             </h2>
 
-            {/* Filter trigger — Figma 1597:463766: h-32, px-13,
-                rounded-4, 1-px border #201E24 @ 20%, gap-7 between
-                icon and label, IconPlusCircle 16 px (Figma uses 16-tile
-                "Add filter icon"), 12/21 Medium #201E24 label.
-                Visible only when `filterEnabled` — set true for the
-                many / filtered scenarios where the list is long enough
-                to need narrowing. Hidden in `few` (3 rows fit on one
-                screen) and `empty` (nothing to filter). */}
+            {/* Filter trigger — Figma 1597:463766 / 797:42255: h-32,
+                px-13, rounded-4, 1-px border #201E24 @ 20%, gap-7
+                between icon and label, IconPlusCircle 16 px, 12/21
+                Medium #201E24 label.  Visible only when `filterEnabled`. */}
             {filterEnabled && (
               <FilterDropdown
-                options={FILTER_OPTIONS}
-                selectedIds={selectedFilters}
-                onToggle={toggleFilter}
-                renderTrigger={(open, count) => (
+                availableNetworks={availableNetworks}
+                availableUsers={DEFAULT_AVAILABLE_USERS}
+                selectedNetworks={selectedNetworks}
+                onNetworksChange={setSelectedNetworks}
+                selectedUsers={selectedUsers}
+                onUsersChange={setSelectedUsers}
+                nameContains={nameContains}
+                onNameContainsChange={setNameContains}
+                view={filterView}
+                onViewChange={setFilterView}
+                renderTrigger={(open) => (
                   <span
                     className={cn(
                       'h-[32px] min-w-[32px] px-[13px] rounded-[4px]',
@@ -263,35 +319,65 @@ export function ReportsTable({
                     )}
                   >
                     <IconPlusCircle size={16} color="#201E24" />
-                    <span>Filter{count > 0 ? ` · ${count}` : ''}</span>
+                    <span>Filter</span>
                   </span>
                 )}
               />
             )}
 
-            {/* Filter chips — same row as the trigger.  Gated on the
-                same `filterEnabled` flag as the trigger above so the
-                chips can never outlive the trigger they're spawned
-                from (e.g. switching scenario from filtered → few). */}
-            {filterEnabled && chips.length > 0 && (
+            {/* Filter chips — Figma 1674:43486 / 44394.  Three chip
+                shapes:
+                  • Network  — single chip aggregating ALL selected
+                    networks; clicking it reopens the Network sub-
+                    selector so the user can edit the selection.
+                  • User     — same, with user initials inside.
+                  • Name contains — pill with split label/value styling;
+                    clicking it reopens the Name-contains editor.
+                Each chip has an × that removes that filter dimension
+                wholesale (per the Figma — there's no per-network ×
+                inside the Network chip; that affordance lives in the
+                sub-selector's checkboxes). */}
+            {filterEnabled && hasAnyFilter && (
               <div className="flex items-center gap-[8px] flex-wrap">
-                {chips.map((c) => (
+                {selectedNetworks.size > 0 && (
+                  <NetworkChip
+                    networks={[...selectedNetworks]}
+                    onClick={() => setFilterView('networks')}
+                    onRemove={() => setSelectedNetworks(new Set())}
+                  />
+                )}
+                {selectedUsers.size > 0 && (
+                  <UserChip
+                    users={[...selectedUsers]
+                      .map((id) => DEFAULT_AVAILABLE_USERS.find((u) => u.id === id))
+                      .filter((u): u is FilterUser => Boolean(u))}
+                    onClick={() => setFilterView('users')}
+                    onRemove={() => setSelectedUsers(new Set())}
+                  />
+                )}
+                {nameContains && (
+                  <NameContainsChip
+                    value={nameContains}
+                    onClick={() => setFilterView('name-edit')}
+                    onRemove={() => setNameContains(null)}
+                  />
+                )}
+                {/* Clear all — only visible when at least one filter
+                    is active AND the dropdown is closed. Re-opening
+                    a chip's editor (filterView !== null) hides the
+                    link so it doesn't compete with the editor. */}
+                {filterView === null && (
                   <button
-                    key={c.id}
                     type="button"
-                    onClick={() => toggleFilter(c.id)}
+                    onClick={clearAllFilters}
                     className={cn(
-                      'h-[28px] pl-[10px] pr-[6px] rounded-full bg-[#EDEAFF]',
-                      'flex items-center gap-[6px] text-[13px] leading-[18px] font-medium text-[#4D36FF]',
-                      'cursor-pointer hover:bg-[#DDD5FF] transition-colors',
+                      'text-[12px] leading-[21px] font-medium text-[#626165]',
+                      'hover:text-[#201E24] transition-colors cursor-pointer',
                     )}
                   >
-                    <span>{c.label}</span>
-                    <span className="w-[16px] h-[16px] rounded-full hover:bg-[rgba(77,54,255,0.15)] flex items-center justify-center">
-                      <IconClose size={12} color="#4D36FF" />
-                    </span>
+                    Clear all
                   </button>
-                ))}
+                )}
               </div>
             )}
           </div>
@@ -407,6 +493,160 @@ export function ReportsTable({
   );
 }
 
+// ── Filter chips ────────────────────────────────────────────────────────────
+//
+// Figma 1674:43486 / 44025 / 44394 / 44910 — three chip shapes that
+// share a common pill chrome (h-32 px-12 rounded-4 1-px #E8E8E9
+// border, white bg). Each chip has a clickable label region (opens
+// the relevant editor) + a trailing × button that removes the filter
+// without opening the editor.
+//
+// `onRemove` stops event propagation so the X button doesn't also
+// fire the chip's "open editor" behavior.
+
+const CHIP_BASE = cn(
+  'h-[32px] px-[12px] rounded-[4px] inline-flex items-center gap-[8px]',
+  'border border-[#E8E8E9] bg-white',
+  'text-[12px] leading-[21px] font-medium text-[#201E24]',
+  'hover:bg-[#F3F3F4] transition-colors cursor-pointer',
+);
+
+interface NetworkChipProps {
+  networks: Platform[];
+  onClick: () => void;
+  onRemove: () => void;
+}
+
+function NetworkChip({ networks, onClick, onRemove }: NetworkChipProps) {
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      className={CHIP_BASE}
+      aria-label="Edit Network filter"
+    >
+      <span>Network</span>
+      <span className="flex items-center gap-[4px]">
+        {networks.slice(0, 3).map((p) => (
+          <span key={p} className="inline-flex items-center justify-center w-[16px] h-[16px]">
+            <PlatformIcon platform={p} size={16} />
+          </span>
+        ))}
+        {networks.length > 3 && (
+          <span className="text-[12px] leading-[16px] text-[#626165]">
+            +{networks.length - 3}
+          </span>
+        )}
+      </span>
+      <ChipRemoveButton onRemove={onRemove} />
+    </span>
+  );
+}
+
+interface UserChipProps {
+  users: FilterUser[];
+  onClick: () => void;
+  onRemove: () => void;
+}
+
+function UserChip({ users, onClick, onRemove }: UserChipProps) {
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      className={CHIP_BASE}
+      aria-label="Edit User filter"
+    >
+      <span>User</span>
+      <span className="flex items-center gap-[4px]">
+        {users.slice(0, 3).map((u) => (
+          <span
+            key={u.id}
+            className="inline-flex items-center justify-center w-[16px] h-[16px] rounded-[3px] bg-[#4D36FF] text-white"
+            style={{ fontSize: 9, fontWeight: 600, lineHeight: 1 }}
+          >
+            {u.initials.slice(0, 2).toUpperCase()}
+          </span>
+        ))}
+        {users.length > 3 && (
+          <span className="text-[12px] leading-[16px] text-[#626165]">
+            +{users.length - 3}
+          </span>
+        )}
+      </span>
+      <ChipRemoveButton onRemove={onRemove} />
+    </span>
+  );
+}
+
+interface NameContainsChipProps {
+  value: string;
+  onClick: () => void;
+  onRemove: () => void;
+}
+
+function NameContainsChip({ value, onClick, onRemove }: NameContainsChipProps) {
+  // Figma 1674:44394 paints the chip with a SUBTLE distinction
+  // between the label "Name contains" (in a softer neutral) and the
+  // value (in the on-background dark) — gives the user a visual
+  // handle on which part is editable.
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      className={CHIP_BASE}
+      aria-label="Edit Name contains filter"
+    >
+      <span className="text-[#626165]">Name contains</span>
+      <span className="text-[#201E24]">{value}</span>
+      <ChipRemoveButton onRemove={onRemove} />
+    </span>
+  );
+}
+
+function ChipRemoveButton({ onRemove }: { onRemove: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        // Stop the click from also reaching the chip-level click
+        // handler (which would open the editor). The X always means
+        // "remove" with no editor follow-up.
+        e.stopPropagation();
+        onRemove();
+      }}
+      onKeyDown={(e) => e.stopPropagation()}
+      aria-label="Remove filter"
+      className={cn(
+        'inline-flex items-center justify-center w-[16px] h-[16px] rounded-[2px]',
+        'text-[#201E24] hover:bg-[rgba(32,30,36,0.1)] transition-colors cursor-pointer',
+      )}
+    >
+      <IconClose size={12} color="#201E24" />
+    </button>
+  );
+}
 
 // ── Column header ──────────────────────────────────────────────────────────
 

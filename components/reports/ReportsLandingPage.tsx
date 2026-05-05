@@ -22,6 +22,8 @@
 
 import { MockReport, REPORT_TEMPLATES, ReportTemplate } from '@/lib/reports-data';
 import type { ScenarioFeatures } from '@/lib/scenario';
+import type { ScenarioInitialFilters } from '@/lib/scenario-data';
+import type { Platform } from '@/types';
 import { TopAppBar } from './TopAppBar';
 import { BuildNewReportSection } from './BuildNewReportSection';
 import { ReportsTable } from './ReportsTable';
@@ -42,7 +44,10 @@ interface ReportsLandingPageProps {
    *  for the semantics of each. Optional so the production caller can
    *  omit them and get the existing default behavior. */
   filterEnabled?: boolean;
-  initialFilters?: ReadonlySet<string>;
+  initialFilters?: ScenarioInitialFilters;
+  /** Network options the Filter dropdown can pick from.  Beta scope
+   *  = FB+TT only; Full scope = mainstream network set. */
+  availableNetworks?: Platform[];
   /** Capability flags for in-development surfaces (rename, sorting).
    *  Threaded through to ReportsTable + ReportRow + ColumnHeader. */
   features?: ScenarioFeatures;
@@ -63,6 +68,7 @@ export function ReportsLandingPage({
   templates = REPORT_TEMPLATES,
   filterEnabled,
   initialFilters,
+  availableNetworks,
   features,
   scenarioKey,
 }: ReportsLandingPageProps) {
@@ -114,6 +120,7 @@ export function ReportsLandingPage({
           onDelete={onDelete}
           filterEnabled={filterEnabled}
           initialFilters={initialFilters}
+          availableNetworks={availableNetworks}
           features={features}
         />
       </main>

@@ -217,16 +217,23 @@ const MANY_REPORTS: MockReport[] = MANY_REPORT_NAMES.map((name, i) => {
 const FILTERED_REPORTS: MockReport[] = MANY_REPORTS;
 
 /**
- * Filter ids that come pre-selected in the "filtered" scenario.  Must
- * map to a real entry in `FILTER_OPTIONS` (lib/reports-data.ts) — and
- * to a network that's permitted under BOTH the Full and Beta template
- * scopes, so the chip survives a Beta-launch render with a non-empty
- * result.  Facebook satisfies both: it has many matches in MANY_REPORTS
- * and is one of the two beta-supported networks alongside TikTok.
+ * Initial filter state for the "filtered" scenario — the table mounts
+ * with one Network chip pre-applied so reviewers see the
+ * "filter applied + smaller result count + active chip" look out of
+ * the gate.  Facebook is the chosen seed because it (a) has many
+ * matches in MANY_REPORTS, and (b) is in scope under BOTH Full and
+ * Beta templates (Beta only allows facebook + tiktok), so the chip
+ * survives every scope without producing zero results.
  */
-export const FILTERED_INITIAL_FILTER_IDS: ReadonlySet<string> = new Set([
-  'net-fb',
-]);
+export interface ScenarioInitialFilters {
+  networks?: Platform[];
+  users?: string[];
+  nameContains?: string;
+}
+
+export const FILTERED_INITIAL_FILTERS: ScenarioInitialFilters = {
+  networks: ['facebook'],
+};
 
 /**
  * Hard cap on the number of rows the "many" / "filtered" scenarios
@@ -307,8 +314,37 @@ export interface ReportsScenarioRender {
    *  (many / filtered).  False for empty + few — three rows fit on
    *  one screen and a Filter trigger would just clutter the row. */
   filterEnabled: boolean;
-  /** Filter chip ids to pre-select when the table mounts. */
-  initialFilters?: ReadonlySet<string>;
+  /** Pre-applied filter chips when the table mounts.  See
+   *  `ScenarioInitialFilters` for the shape. */
+  initialFilters?: ScenarioInitialFilters;
+  /** Networks the FilterDropdown's Network sub-selector can pick from.
+   *  Beta scope ships only Facebook + TikTok; Full scope ships the
+   *  mainstream network set. */
+  availableNetworks: Platform[];
+}
+
+// Mainstream network set surfaced in the FilterDropdown's Network
+// sub-selector when the scope is 'full'. Order mirrors the Figma
+// network list (1674:44025).
+const FULL_AVAILABLE_NETWORKS: Platform[] = [
+  'facebook',
+  'instagram',
+  'linkedin',
+  'tiktok',
+  'x',
+  'youtube',
+];
+
+const BETA_AVAILABLE_NETWORKS: Platform[] = ['facebook', 'tiktok'];
+
+/**
+ * Networks visible inside the Filter dropdown's Network sub-selector,
+ * gated by template scope. Beta = FB+TT only; Full = the mainstream
+ * 6-network set.  Used by `ReportsLandingPage` to plumb the option
+ * list down to `ReportsTable` → `FilterDropdown`.
+ */
+export function availableNetworksForScope(scope: TemplateScope): Platform[] {
+  return scope === 'beta' ? BETA_AVAILABLE_NETWORKS : FULL_AVAILABLE_NETWORKS;
 }
 
 export function reportsForScenario(
@@ -319,11 +355,16 @@ export function reportsForScenario(
   // below funnels its dataset through the same filter, and re-running
   // the lookup per case would just be noise.
   const allowed = allowedNetworksForScope(scope);
+  const availableNetworks = availableNetworksForScope(scope);
   switch (state) {
     case 'empty':
-      return { reports: [], filterEnabled: false };
+      return { reports: [], filterEnabled: false, availableNetworks };
     case 'few':
-      return { reports: applyNetworkScope(FEW_REPORTS, allowed), filterEnabled: false };
+      return {
+        reports: applyNetworkScope(FEW_REPORTS, allowed),
+        filterEnabled: false,
+        availableNetworks,
+      };
     case 'many':
       // Apply scope FIRST, then cap.  Doing it the other way around
       // (cap → scope) means a beta-scoped many could end up with far
@@ -332,12 +373,14 @@ export function reportsForScenario(
       return {
         reports: applyNetworkScope(MANY_REPORTS, allowed).slice(0, MANY_VISIBLE_LIMIT),
         filterEnabled: true,
+        availableNetworks,
       };
     case 'filtered':
       return {
         reports: applyNetworkScope(FILTERED_REPORTS, allowed).slice(0, MANY_VISIBLE_LIMIT),
         filterEnabled: true,
-        initialFilters: FILTERED_INITIAL_FILTER_IDS,
+        availableNetworks,
+        initialFilters: FILTERED_INITIAL_FILTERS,
       };
   }
 }

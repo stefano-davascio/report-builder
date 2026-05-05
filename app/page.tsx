@@ -311,6 +311,7 @@ export default function Home() {
         templates={scenarioTemplates}
         filterEnabled={scenarioRender.filterEnabled}
         initialFilters={scenarioRender.initialFilters}
+        availableNetworks={scenarioRender.availableNetworks}
         features={scenario.features}
         scenarioKey={scenario.reportListState}
       />
