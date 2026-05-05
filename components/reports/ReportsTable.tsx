@@ -347,17 +347,14 @@ export function ReportsTable({
             )}
           </div>
 
-          {/* Search bar — implemented per Figma 1583:461048 with all
-              four states (Default / Click / Typing / Typed). Hidden
-              when the source list is empty (searching nothing is a
-              no-op surface). See SearchBar definition below for the
-              full visual contract. */}
-          {searchEnabled && !isSourceEmpty && (
-            <SearchBar
-              value={searchQuery}
-              onChange={setSearchQuery}
-            />
-          )}
+          {/* Search bar removed for now.  The SearchBar component +
+              all the supporting state (searchQuery, the search-aware
+              filter pass below, the SearchBar definition itself) are
+              left in place so re-enabling is one render call:
+                {searchEnabled && !isSourceEmpty && (
+                  <SearchBar value={searchQuery} onChange={setSearchQuery} />
+                )}
+              See Figma 1583:461048 for the four-state visual spec. */}
         </div>
 
       {/* Column header row — sortable Name / Date / Modules columns +
