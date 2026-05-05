@@ -232,10 +232,15 @@ export function ReportsTable({
   const isSourceEmpty = reports.length === 0;
 
   // ── Active-filter helpers ────────────────────────────────────────────────
-  const hasAnyFilter =
-    selectedNetworks.size > 0 ||
-    selectedUsers.size > 0 ||
-    (nameContains !== null && nameContains.length > 0);
+  // Each "active filter dimension" produces one chip in the row —
+  // Network / User / Name-contains.  We count distinct dimensions
+  // (NOT individual selections) so a Network chip with five networks
+  // selected still counts as a single chip.
+  const activeChipCount =
+    (selectedNetworks.size > 0 ? 1 : 0) +
+    (selectedUsers.size > 0 ? 1 : 0) +
+    (nameContains !== null && nameContains.length > 0 ? 1 : 0);
+  const hasAnyFilter = activeChipCount > 0;
 
   const clearAllFilters = () => {
     setSelectedNetworks(new Set());
@@ -369,11 +374,15 @@ export function ReportsTable({
                     onRemove={() => setNameContains(null)}
                   />
                 )}
-                {/* Clear all — only visible when at least one filter
-                    is active AND the dropdown is closed. Re-opening
-                    a chip's editor (filterView !== null) hides the
-                    link so it doesn't compete with the editor. */}
-                {filterView === null && (
+                {/* Clear all — only visible when there are MULTIPLE
+                    chips. With a single chip the chip's own × is
+                    sufficient (clicking it has the same effect as
+                    "Clear all" would have on a one-chip row), so
+                    rendering both creates redundant UI.  Also
+                    suppressed while any chip's editor is open
+                    (filterView !== null) so the link doesn't compete
+                    with the editor. */}
+                {filterView === null && activeChipCount > 1 && (
                   <button
                     type="button"
                     onClick={clearAllFilters}
