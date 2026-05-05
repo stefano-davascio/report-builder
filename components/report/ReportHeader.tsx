@@ -151,18 +151,15 @@ export function ReportHeader({
             </span>
           )}
           {/* Pencil rename affordance — Figma 283:2740 wrapper, 14-px
-              `rename` glyph (IconPencil). Two tweaks vs the literal
-              token-set:
-                • Stroke override `[&_path]:[stroke-width:2.25]` —
-                  Figma renders this glyph at ~1.33 px stroke at 14 px
-                  size, but the lib default (1.5 in 24-tile) only
-                  yields 0.875 px at size=14. Bumping the path stroke
-                  to 2.25 lands the rendered weight at
-                  `2.25 × 14/24 ≈ 1.31 px`, matching Figma to within
-                  0.02 px.
-                • Wrapper hover bg removed when the chip's parent
-                  hover already darkens the row — the inset chip
-                  affordance was double-stacking. */}
+              `rename` glyph (IconPencil). Stroke override
+              `[&_path]:[stroke-width:1.33]` — Figma renders this
+              glyph at ~1.33 px stroke at 14-tile.  Since the icon
+              library now uses `vector-effect: non-scaling-stroke`,
+              the value is interpreted in CSS pixels directly (no
+              viewBox scaling), so we set 1.33 literally instead of
+              the previous 2.25 viewBox-units that pre-compensated
+              for a 14/24 scale-down.  The lib default of 1.5 would
+              also be acceptable here but a touch heavier than spec. */}
           <button
             onClick={(e) => { e.stopPropagation(); setTitleDraft(title); setEditingTitle(true); }}
             className="w-6 h-6 flex items-center justify-center flex-shrink-0 cursor-pointer"
@@ -171,7 +168,7 @@ export function ReportHeader({
             <IconPencil
               size={14}
               color="#201E24"
-              className="[&_path]:[stroke-width:2.25]"
+              className="[&_path]:[stroke-width:1.33]"
             />
           </button>
         </div>
