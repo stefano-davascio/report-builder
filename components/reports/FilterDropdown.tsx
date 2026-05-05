@@ -38,11 +38,13 @@ interface FilterDropdownProps {
   renderTrigger?: (open: boolean, count: number) => ReactNode;
 }
 
+// Profile + Profile lists are hidden from the top-level drill list
+// for now — see the matching commented-out rows in
+// `FILTER_OPTIONS` (lib/reports-data.ts).  Re-enable in tandem when
+// the underlying selection wiring is built.
 const CATEGORY_ORDER: FilterOption['category'][] = [
   'Network',
   'User',
-  'Profile',
-  'Profile lists',
 ];
 
 type Drill = { kind: 'top' } | { kind: 'category'; cat: FilterOption['category'] };

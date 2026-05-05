@@ -382,9 +382,14 @@ export const FILTER_OPTIONS: FilterOption[] = [
   { id: 'net-bs',   label: 'Bluesky',   category: 'Network' },
   { id: 'usr-me',   label: 'Me',                category: 'User' },
   { id: 'usr-team', label: 'Team members',      category: 'User' },
-  { id: 'pl-tence', label: 'Tenceclothier',     category: 'Profile' },
-  { id: 'pll-core', label: 'Core profiles',     category: 'Profile lists' },
-  { id: 'pll-emea', label: 'EMEA profiles',     category: 'Profile lists' },
+  // Profile + Profile lists categories hidden for now — re-add when
+  // the underlying selection wiring exists.  The category strings
+  // stay in `FilterOption['category']` so re-enabling is just a
+  // matter of dropping these rows back in (and adding the categories
+  // back to `CATEGORY_ORDER` in FilterDropdown.tsx):
+  //   { id: 'pl-tence', label: 'Tenceclothier',     category: 'Profile' },
+  //   { id: 'pll-core', label: 'Core profiles',     category: 'Profile lists' },
+  //   { id: 'pll-emea', label: 'EMEA profiles',     category: 'Profile lists' },
 ];
 
 // ── Date formatting ────────────────────────────────────────────────────────
