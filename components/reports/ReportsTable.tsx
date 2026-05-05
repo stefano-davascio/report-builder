@@ -320,10 +320,15 @@ export function ReportsTable({
                     className={cn(
                       'h-[32px] min-w-[32px] px-[13px] rounded-[4px]',
                       'inline-flex items-center justify-center gap-[7px]',
-                      'border border-[rgba(32,30,36,0.2)]',
+                      'border border-[rgba(32,30,36,0.2)] bg-transparent',
                       'text-[12px] leading-[21px] font-medium text-[#201E24]',
-                      open ? 'bg-[#F3F3F4]' : 'bg-transparent',
-                      'hover:bg-[#F3F3F4] transition-colors',
+                      'transition-colors',
+                      // Hover only applies when the dropdown is CLOSED.
+                      // Once it's open the trigger should sit at rest
+                      // visually (Figma 1670:42280) — applying the
+                      // hover tint while open reads as a stuck/active
+                      // state and competes with the dropdown panel.
+                      !open && 'hover:bg-[#F3F3F4]',
                     )}
                   >
                     <IconPlusCircle
