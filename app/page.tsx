@@ -296,9 +296,9 @@ export default function Home() {
         onDuplicate={handleDuplicate}
         onDelete={handleDelete}
         templates={scenarioTemplates}
-        searchEnabled={scenarioRender.searchEnabled}
-        paginationEnabled={scenarioRender.paginationEnabled}
+        filterEnabled={scenarioRender.filterEnabled}
         initialFilters={scenarioRender.initialFilters}
+        features={scenario.features}
         scenarioKey={scenario.reportListState}
       />
     );

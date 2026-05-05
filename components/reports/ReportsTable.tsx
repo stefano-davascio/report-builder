@@ -23,8 +23,9 @@
  *     not-sorted → desc → asc → not-sorted (third click clears)
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { MockReport, FILTER_OPTIONS } from '@/lib/reports-data';
+import type { ScenarioFeatures } from '@/lib/scenario';
 import { FilterDropdown } from './FilterDropdown';
 import { ReportRow, REPORT_ROW_COLUMNS } from './ReportRow';
 import { EmptyState } from './EmptyState';
@@ -36,10 +37,6 @@ import {
   IconSortUp,
   IconSortDown,
   IconPlusCircle,
-  IconSearch,
-  IconChevronDown,
-  IconChevronRight,
-  IconCheck,
 } from '@/components/icons/SendiIcons';
 import { cn } from '@/lib/utils';
 
@@ -49,30 +46,26 @@ interface ReportsTableProps {
   onRename: (id: string, name: string) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
-  /** Show the search input above the column header strip.  Driven by
-   *  the Scenario Switcher's "many" / "filtered" presets — designs
-   *  spec it as hidden when the list is small enough that scanning is
-   *  faster than typing. */
-  searchEnabled?: boolean;
-  /** Show the pagination footer below the row body when there's more
-   *  than one page worth of results.  Same Scenario-Switcher gating —
-   *  small lists don't need pagination chrome. */
-  paginationEnabled?: boolean;
+  /** Show the Filter trigger above the column header strip.  Driven
+   *  by the Scenario Switcher's "many" / "filtered" presets — designs
+   *  hide the trigger when the list is small enough that filtering
+   *  doesn't earn its pixels (3 rows fit on one screen, so the user
+   *  scans rather than narrows). */
+  filterEnabled?: boolean;
   /** Filter chip ids to start with selected.  Used by the
    *  Scenario Switcher's "filtered" preset so the table mounts with a
    *  pre-applied filter chip + reduced result set, without forcing the
    *  parent to reach into the table's internal state. */
   initialFilters?: ReadonlySet<string>;
+  /** Capability flags for in-development surfaces. Defaults to all
+   *  OFF — production scope hides Rename and Sorting. */
+  features?: ScenarioFeatures;
 }
 
-/**
- * Allowed values for the "N per page" pagination selector — Figma spec
- * defaults to 10. Hoisted out of state so the dropdown options and the
- * default value share a single source of truth.
- */
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
-type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
-const DEFAULT_PAGE_SIZE: PageSize = 10;
+const FEATURES_DEFAULT: ScenarioFeatures = {
+  rename: false,
+  sorting: false,
+};
 
 export type SortKey = 'name' | 'modifiedAt' | 'modules';
 export type SortDir = 'asc' | 'desc';
@@ -95,9 +88,9 @@ export function ReportsTable({
   onRename,
   onDuplicate,
   onDelete,
-  searchEnabled = false,
-  paginationEnabled = false,
+  filterEnabled = false,
   initialFilters,
+  features = FEATURES_DEFAULT,
 }: ReportsTableProps) {
   // Selected-filter state seeds from `initialFilters` so the
   // Scenario Switcher's "filtered" preset can mount with chips already
@@ -108,31 +101,14 @@ export function ReportsTable({
   const [selectedFilters, setSelectedFilters] = useState<Set<string>>(
     () => new Set(initialFilters ?? []),
   );
-  // Free-text search query — only meaningful when `searchEnabled` is
-  // true; the input itself is conditionally rendered, so for small
-  // lists this state stays at "" and adds no overhead.
-  const [searchQuery, setSearchQuery] = useState('');
-  // Current page (1-indexed). Reset to 1 whenever filters or search
-  // change so the user never lands on an empty page after narrowing
-  // results.
-  const [page, setPage] = useState(1);
-  // Page-size state — drives both the row slice math and the
-  // pagination footer's "N per page" selector. Defaults to 10 (Figma
-  // spec) and the user can pick from PAGE_SIZE_OPTIONS via the
-  // dropdown trigger at the right edge of the pagination footer.
-  // Changing the size resets the page to 1 so we don't end up on a
-  // page index that no longer exists at the new size.
-  const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
-  const handlePageSizeChange = (next: PageSize) => {
-    setPageSize(next);
-    setPage(1);
-  };
   // Initial sort intentionally has NO active key — every column should
   // render with the neutral `IconSortUpDown` glyph until the user
   // clicks one. The mock data is already in modifiedAt-desc order at
   // the source so the default render matches the prior implicit sort
   // visually; only the directional indicator on the Modified header is
-  // suppressed.
+  // suppressed.  Sort state is preserved even when `features.sorting`
+  // is off (the headers just stop emitting `setSort` calls) so toggling
+  // the flag back on doesn't drop any in-progress ordering.
   const [sort, setSort] = useState<SortState>({ key: null, dir: 'desc' });
   const [renamingId, setRenamingId] = useState<string | null>(null);
   // Pending-delete state — when a row's action menu fires "Delete" we
@@ -145,8 +121,6 @@ export function ReportsTable({
   // Only the Network category has data wiring today; the other category
   // selections render as chips but no-op against the data — preserves the
   // affordance end-to-end so the Figma drill-in pattern reads the same.
-  // Search runs ON TOP of filters: chips first, then case-insensitive
-  // substring match against the report name.
   const filtered = useMemo(() => {
     let rows = reports;
     if (selectedFilters.size > 0) {
@@ -162,14 +136,14 @@ export function ReportsTable({
         );
       }
     }
-    if (searchEnabled && searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      rows = rows.filter((r) => r.name.toLowerCase().includes(q));
-    }
     return rows;
-  }, [reports, selectedFilters, searchEnabled, searchQuery]);
+  }, [reports, selectedFilters]);
 
   // ── Sorting ──────────────────────────────────────────────────────────────
+  // Sort math runs unconditionally (cheap on hundreds of rows); the
+  // feature flag only gates the column-header UI that triggers sort
+  // state changes. Off → headers stay static, `sort.key` stays null,
+  // `sorted === filtered`.
   const sorted = useMemo(() => {
     if (!sort.key) return filtered;
     const arr = [...filtered];
@@ -183,29 +157,6 @@ export function ReportsTable({
     });
     return arr;
   }, [filtered, sort]);
-
-  // ── Pagination ───────────────────────────────────────────────────────────
-  // Page math runs after sort so the page slice respects the active
-  // ordering.  When pagination is OFF we render every row (no slice);
-  // the math still runs but `pageRows === sorted`.
-  const totalPages = paginationEnabled
-    ? Math.max(1, Math.ceil(sorted.length / pageSize))
-    : 1;
-  // Guard against the user being on a page that no longer has rows
-  // (e.g. they were on page 3, applied a filter that left only 1
-  // page).  Clamp the displayed page without touching the state — a
-  // useEffect below brings the state back in line for the next render.
-  const safePage = Math.min(Math.max(1, page), totalPages);
-  const pageRows = paginationEnabled
-    ? sorted.slice((safePage - 1) * pageSize, safePage * pageSize)
-    : sorted;
-
-  // Reset to page 1 whenever the result count changes — keeps the user
-  // on something visible after they apply a filter or type a query.
-  // Tracked via a ref-style memo so we don't fight React's render cycle.
-  useEffect(() => {
-    if (page > totalPages) setPage(1);
-  }, [page, totalPages]);
 
   // ── Source-empty rule ────────────────────────────────────────────────────
   // When the source list is empty (no reports authored yet), all
@@ -291,13 +242,11 @@ export function ReportsTable({
                 rounded-4, 1-px border #201E24 @ 20%, gap-7 between
                 icon and label, IconPlusCircle 16 px (Figma uses 16-tile
                 "Add filter icon"), 12/21 Medium #201E24 label.
-                Visible only when `searchEnabled` — the same gate the
-                search input uses.  Both surfaces are "narrow a long
-                list" affordances and only make sense in scenarios
-                that *have* a long list (many / filtered).  In the
-                `few` scenario (3 rows) and `empty` scenario the
-                filter is hidden so it doesn't clutter the row. */}
-            {searchEnabled && (
+                Visible only when `filterEnabled` — set true for the
+                many / filtered scenarios where the list is long enough
+                to need narrowing. Hidden in `few` (3 rows fit on one
+                screen) and `empty` (nothing to filter). */}
+            {filterEnabled && (
               <FilterDropdown
                 options={FILTER_OPTIONS}
                 selectedIds={selectedFilters}
@@ -321,10 +270,10 @@ export function ReportsTable({
             )}
 
             {/* Filter chips — same row as the trigger.  Gated on the
-                same `searchEnabled` flag as the trigger above so the
+                same `filterEnabled` flag as the trigger above so the
                 chips can never outlive the trigger they're spawned
                 from (e.g. switching scenario from filtered → few). */}
-            {searchEnabled && chips.length > 0 && (
+            {filterEnabled && chips.length > 0 && (
               <div className="flex items-center gap-[8px] flex-wrap">
                 {chips.map((c) => (
                   <button
@@ -347,14 +296,10 @@ export function ReportsTable({
             )}
           </div>
 
-          {/* Search bar removed for now.  The SearchBar component +
-              all the supporting state (searchQuery, the search-aware
-              filter pass below, the SearchBar definition itself) are
-              left in place so re-enabling is one render call:
-                {searchEnabled && !isSourceEmpty && (
-                  <SearchBar value={searchQuery} onChange={setSearchQuery} />
-                )}
-              See Figma 1583:461048 for the four-state visual spec. */}
+          {/* Standalone search input is removed entirely — search now
+              lives inside the FilterDropdown's per-category drill view
+              (see `query` state in FilterDropdown.tsx).  Above-the-table
+              search is gone for the foreseeable future. */}
         </div>
 
       {/* Column header row — sortable Name / Date / Modules columns +
@@ -378,6 +323,7 @@ export function ReportsTable({
               label="Name"
               sortKey="name"
               state={sort}
+              sortable={features.sorting}
               onSort={(k) => setSort((s) => nextSortState(s, k))}
             />
             {/* "Date modified" — Figma 1597:463779.  Earlier code had
@@ -388,6 +334,7 @@ export function ReportsTable({
               label="Date modified"
               sortKey="modifiedAt"
               state={sort}
+              sortable={features.sorting}
               onSort={(k) => setSort((s) => nextSortState(s, k))}
             />
             <ColumnHeader
@@ -395,6 +342,7 @@ export function ReportsTable({
               label="Modules"
               sortKey="modules"
               state={sort}
+              sortable={features.sorting}
               onSort={(k) => setSort((s) => nextSortState(s, k))}
             />
             {/* Networks: header frame is intentionally empty in Figma. */}
@@ -404,15 +352,14 @@ export function ReportsTable({
         )}
       </div>{/* /sticky chrome wrapper */}
 
-      {/* Body — `pageRows` instead of `sorted` so pagination's slice
-          actually narrows the rendered set when enabled. When
-          pagination is OFF, `pageRows === sorted`, so the empty / row
-          paths behave the same as before. The empty-state copy keys
-          off `reports.length === 0` (the SOURCE list) rather than
-          `pageRows.length === 0`, so a search/filter that reduces the
-          result count correctly shows the "No matches" copy instead
-          of the first-run "No reports yet" copy. */}
-      {pageRows.length === 0 ? (
+      {/* Body — pagination removed, so we render the entire `sorted`
+          list. The page is its own scroll container (see
+          ReportsLandingPage), so a 99-row "many" scenario just scrolls
+          naturally. The empty-state copy keys off `reports.length`
+          (the SOURCE list) so a filter that reduces results to zero
+          shows "No matches", while an authentically empty list shows
+          the first-run "No reports yet" copy. */}
+      {sorted.length === 0 ? (
         <EmptyState
           title={reports.length === 0 ? 'No reports yet' : 'No matches'}
           description={
@@ -423,11 +370,12 @@ export function ReportsTable({
         />
       ) : (
         <div>
-          {pageRows.map((r, i) => (
+          {sorted.map((r, i) => (
             <ReportRow
               key={r.id}
               report={r}
-              isLast={i === pageRows.length - 1}
+              isLast={i === sorted.length - 1}
+              renameEnabled={features.rename}
               renaming={renamingId === r.id}
               onStartRename={() => setRenamingId(r.id)}
               onCommitRename={(next) => {
@@ -440,25 +388,6 @@ export function ReportsTable({
             />
           ))}
         </div>
-      )}
-
-      {/* Pagination footer — mounts whenever the table has rows and
-          the scenario asks for pagination chrome.  We deliberately do
-          NOT gate on `totalPages > 1` here: the per-page selector
-          inside the footer needs to stay reachable even on a single
-          page result so the user can bump the size DOWN (e.g. 25 → 10)
-          and re-engage paging.  The Previous / Next / page-number
-          pills hide internally when `totalPages <= 1` — see
-          `PaginationFooter` below. */}
-      {paginationEnabled && sorted.length > 0 && (
-        <PaginationFooter
-          page={safePage}
-          totalPages={totalPages}
-          totalItems={sorted.length}
-          pageSize={pageSize}
-          onPageChange={setPage}
-          onPageSizeChange={handlePageSizeChange}
-        />
       )}
 
       {/* Delete confirmation dialog — Figma 1366:346431. Open whenever
@@ -478,475 +407,6 @@ export function ReportsTable({
   );
 }
 
-// ── Search bar ─────────────────────────────────────────────────────────────
-//
-// Figma 1583:461048 ("Search bar container") defines the four visual states:
-//
-//   ┌─────────────────────────────────────────────────────┐
-//   │ Default — bg #F3F3F4, no border, no shadow.         │ idle, empty
-//   │   [search]  Search reports…                         │
-//   ├─────────────────────────────────────────────────────┤
-//   │ Click   — bg #FFFFFF, 1-px #4D36FF border,          │ focused, empty
-//   │           2-px focus ring rgba(77,54,255,0.25).     │
-//   │   [search]  |                                       │
-//   ├─────────────────────────────────────────────────────┤
-//   │ Typing  — bg #FFFFFF, 1-px #4D36FF border,          │ focused, has text
-//   │           2-px focus ring; trailing 16-px close     │
-//   │           glyph clears the input.                   │
-//   │   [search]  some query|                       [×]   │
-//   ├─────────────────────────────────────────────────────┤
-//   │ Typed   — bg #F3F3F4 (back to default fill), no     │ unfocused, has text
-//   │           border, no shadow; trailing close glyph   │
-//   │           still present so the user can clear from  │
-//   │           an unfocused state.                       │
-//   │   [search]  some query                        [×]   │
-//   └─────────────────────────────────────────────────────┘
-//
-// Sizing:
-//   • Container is exactly 244 × 32 px (Figma metadata for every state
-//     symbol). Border lives INSIDE that 32 — `border` always renders so
-//     the focus transition doesn't shift content area by 2 px.
-//   • `px-[10px]` + `gap-[8px]` puts the leading icon flush 10 px from
-//     the left edge with 8 px clear space before the input.
-//   • Trailing close button replaces the rightmost slot when the input
-//     has a value, regardless of focus state — this is what
-//     Figma's `justify-between` flip in the inner Search bar accomplishes.
-//
-// Colors (verified directly against the Figma SVG assets):
-//   • Leading search glyph + trailing close glyph render with
-//     `stroke="var(--stroke-0, #201E24)"` in the asset → use #201E24
-//     (TRIUS/theme/light/on-background). NOT the placeholder gray.
-//   • `#78767C` — neutral500, used ONLY for the placeholder label and
-//      for the typed value text (Figma keeps the typed text in the
-//      neutral, not in #201E24 — verified in the design's typed state).
-//   • `#4D36FF` — brand primary, used for the focused border and the
-//      translucent focus ring (`0 0 0 2px rgba(77,54,255,0.25)`).
-//
-// The native `:focus` outline is suppressed; we do focus styling on the
-// CONTAINER (so the input visual + its surrounding chrome animate as
-// one shape). `onFocus` / `onBlur` on the input drive the `focused`
-// flag because tracking via `:focus-within` would still leave the
-// container styled when the user clicks the (close) button — and
-// clicking the close should keep the input focused but doesn't re-fire
-// :focus-within consistently across browsers.
-interface SearchBarProps {
-  value: string;
-  onChange: (next: string) => void;
-}
-
-function SearchBar({ value, onChange }: SearchBarProps) {
-  const [focused, setFocused] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const hasValue = value.length > 0;
-
-  return (
-    <div
-      // Click anywhere in the chrome focuses the input — without this,
-      // the 10-px side padding and the 8-px gap zones between icon and
-      // input become dead click-through regions, which feels broken on
-      // a 244-px target where those zones make up ~15 % of the surface.
-      onClick={() => inputRef.current?.focus()}
-      className={cn(
-        'flex items-center gap-[8px] w-[244px] h-[32px] px-[10px] rounded-[6px]',
-        // 1-px border ALWAYS — transparent at rest so the focused state
-        // doesn't add 2 px to the box width. Color toggles below.
-        'border',
-        // Click + Typing share the same focused chrome (white bg,
-        // purple border, focus ring). Default + Typed share the gray
-        // fill with no border / no ring.
-        focused
-          ? 'bg-white border-[#4D36FF]'
-          : 'bg-[#F3F3F4] border-transparent',
-        'transition-colors',
-      )}
-      style={
-        focused
-          ? { boxShadow: '0 0 0 2px rgba(77, 54, 255, 0.25)' }
-          : undefined
-      }
-    >
-      {/* Leading search icon — 16-px tile, on-background stroke
-          (#201E24 — verified directly in the Figma SVG asset, where
-          the path renders with `stroke="var(--stroke-0, #201E24)"`).
-          The icon does NOT match the placeholder color: only the
-          placeholder text is in neutral500 #78767C; the icon glyph
-          stays in the darker on-background color across every state. */}
-      <IconSearch size={16} color="#201E24" />
-
-      {/* The input itself is visually invisible — `bg-transparent`,
-          no border, no outline. Container chrome carries the visuals.
-          Typography 12 px, line-height 21 (vertical centering inside
-          the 32-px container; Figma's 24-px leading would push the
-          glyph baseline above the icon, so we drop to 21 which is
-          already used by the Filter button label next door). */}
-      <input
-        ref={inputRef}
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        placeholder="Search reports..."
-        aria-label="Search reports"
-        className={cn(
-          'flex-1 min-w-0 bg-transparent border-0 outline-none',
-          'text-[12px] leading-[21px] font-normal',
-          // Typed value is rendered in the same neutral500 as the
-          // placeholder per Figma — even when unfocused, the typed
-          // text doesn't shift to the dark on-background color.
-          'text-[#78767C] placeholder:text-[#78767C]',
-        )}
-      />
-
-      {/* Trailing clear button — surfaces only when the input has a
-          value (Typing + Typed states). Clears the input and keeps
-          focus on the input so the user lands back in the Click state
-          rather than blurring out to Default. `mousedown` + preventDefault
-          stops the input from blurring during the click; `onClick` then
-          performs the clear. Without preventDefault, the input would
-          blur, shift to Typed (no value → Default), then re-focus —
-          a perceptible flicker. */}
-      {hasValue && (
-        <button
-          type="button"
-          aria-label="Clear search"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={(e) => {
-            e.stopPropagation();
-            onChange('');
-            inputRef.current?.focus();
-          }}
-          className={cn(
-            'flex-shrink-0 inline-flex items-center justify-center',
-            'w-[16px] h-[16px] cursor-pointer',
-          )}
-        >
-          <IconClose size={16} color="#201E24" />
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ── Pagination ─────────────────────────────────────────────────────────────
-//
-// Figma 1597:463997 ("Pagination Container") — horizontally-stacked
-// row sitting centered below the table:
-//
-//   ┌───────────┬───────────────────┬────────────┬──────────────┐
-//   │ Previous  │ 1   2   3   4 … │   Next →   │ 10 per page▼ │
-//   └───────────┴───────────────────┴────────────┴──────────────┘
-//
-// Pieces, left → right:
-//   • Previous pill  — chevron_left + "Previous", h-32 px-12 rounded-4,
-//     bg white, label color #908F92 when at page 1 (visually disabled
-//     even though the button itself is just inert), 12/21 IBM Plex Sans
-//     Medium.
-//   • Page numbers   — h-32 min-w-32 px-2 rounded-4. Active page gets
-//     bg #EDEAFF and label #4D36FF; inactive bg white, label #201E24.
-//   • Next pill      — "Next" + chevron_right, h-32 px-12 rounded-4,
-//     bg white, label #201E24 (or #908F92 when at last page).
-//   • Per-page menu  — bordered (1 px #E8E8E9) pill, h-32 px-13, label
-//     "{N} per page" + chevron_down, bg white, label #201E24. Click
-//     opens a small upward menu (Figma 1615:521008 — "Dropdown / Image")
-//     with the values from PAGE_SIZE_OPTIONS. The dropdown opens UPWARD
-//     because it lives at the page bottom and a downward menu would
-//     clip below the viewport edge.  Menu visual contract:
-//       • 162-px wide container (max 240), rounded-4, white bg
-//       • shadow: 1-px translucent ring + soft drop (NO border)
-//       • py-8 outer + px-8 inner gutter so option rows are inset
-//       • each row: gap-16 px-16 py-8, label 12/18 #201E24
-//       • bg-white at rest, hover:bg-[#EDEAFF] (lavender is the HOVER
-//         state, not the active state — applies to every row including
-//         the currently-selected one)
-//       • selected row: a trailing 16-px purple check_sm (#4D36FF) is
-//         the ONLY active-state affordance.  Label color stays #201E24.
-
-interface PaginationFooterProps {
-  page: number;
-  totalPages: number;
-  totalItems: number;
-  pageSize: PageSize;
-  onPageChange: (next: number) => void;
-  onPageSizeChange: (next: PageSize) => void;
-}
-
-function PaginationFooter({
-  page,
-  totalPages,
-  totalItems: _totalItems,
-  pageSize,
-  onPageChange,
-  onPageSizeChange,
-}: PaginationFooterProps) {
-  // Show the page navigation cluster (Previous + numbers + Next) only
-  // when there's somewhere to navigate to.  On a single-page result
-  // we still render the per-page selector so the user can shrink the
-  // size and re-engage paging (e.g. switch from 25 → 10 on a 25-row
-  // dataset and watch pagination kick back in).
-  const showPageNav = totalPages > 1;
-  const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
-  return (
-    <div
-      // Centered horizontally below the body — Figma's
-      // "Pagination Container" sits at justify-center / mt-24 inside
-      // the 1114-px content column.
-      className="flex items-center justify-center gap-[6px] mt-[24px] mb-[40px]"
-      style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
-    >
-      {showPageNav && (
-        <>
-          <NavPill
-            disabled={page === 1}
-            onClick={() => onPageChange(page - 1)}
-            ariaLabel="Previous page"
-            leadingChevronDirection="left"
-            label="Previous"
-          />
-          <div className="flex items-center gap-[6px]">
-            {pages.map((p) => (
-              <PageNumber
-                key={p}
-                active={p === page}
-                onClick={() => onPageChange(p)}
-                label={p}
-              />
-            ))}
-          </div>
-          <NavPill
-            disabled={page === totalPages}
-            onClick={() => onPageChange(page + 1)}
-            ariaLabel="Next page"
-            trailingChevronDirection="right"
-            label="Next"
-          />
-        </>
-      )}
-      <PerPageSelector pageSize={pageSize} onChange={onPageSizeChange} />
-    </div>
-  );
-}
-
-// "Previous" / "Next" pills — share geometry; only the chevron side
-// and the disabled-when-at-edge label color differ.
-function NavPill({
-  label,
-  onClick,
-  disabled,
-  ariaLabel,
-  leadingChevronDirection,
-  trailingChevronDirection,
-}: {
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  ariaLabel: string;
-  leadingChevronDirection?: 'left' | 'right';
-  trailingChevronDirection?: 'left' | 'right';
-}) {
-  return (
-    <button
-      type="button"
-      onClick={disabled ? undefined : onClick}
-      aria-label={ariaLabel}
-      disabled={disabled}
-      className={cn(
-        'h-[32px] min-w-[32px] px-[12px] rounded-[4px] bg-white',
-        'inline-flex items-center justify-center gap-[8px]',
-        'text-[12px] leading-[21px] font-medium transition-colors',
-        disabled ? 'text-[#908F92] cursor-default' : 'text-[#201E24] hover:bg-[#F3F3F4]',
-      )}
-    >
-      {leadingChevronDirection && (
-        <Chevron direction={leadingChevronDirection} disabled={disabled} />
-      )}
-      <span>{label}</span>
-      {trailingChevronDirection && (
-        <Chevron direction={trailingChevronDirection} disabled={disabled} />
-      )}
-    </button>
-  );
-}
-
-function PageNumber({
-  label,
-  active,
-  onClick,
-}: {
-  label: number;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-current={active ? 'page' : undefined}
-      aria-label={`Page ${label}`}
-      className={cn(
-        'h-[32px] min-w-[32px] px-[2px] rounded-[4px]',
-        'inline-flex items-center justify-center transition-colors',
-        'text-[12px] leading-[21px] font-medium',
-        active
-          ? 'bg-[#EDEAFF] text-[#4D36FF]'
-          : 'bg-white text-[#201E24] hover:bg-[#F3F3F4]',
-      )}
-    >
-      {label}
-    </button>
-  );
-}
-
-function PerPageSelector({
-  pageSize,
-  onChange,
-}: {
-  pageSize: PageSize;
-  onChange: (next: PageSize) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-
-  // Close on outside click — the menu lives in the same DOM subtree as
-  // the trigger (no portal), so a single ancestor check resolves
-  // "inside the menu" vs "elsewhere on the page".
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (triggerRef.current && triggerRef.current.contains(target)) return;
-      const menu = document.querySelector('[data-per-page-menu]');
-      if (menu && menu.contains(target)) return;
-      setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  // Escape closes the menu — keeps keyboard users from being trapped.
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [open]);
-
-  return (
-    <div className="relative">
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label="Items per page"
-        className={cn(
-          'h-[32px] min-w-[32px] px-[13px] rounded-[4px] bg-white',
-          'inline-flex items-center justify-center gap-[8px]',
-          'border border-[#E8E8E9]',
-          'text-[12px] leading-[21px] font-medium text-[#201E24]',
-          'hover:bg-[#F3F3F4] transition-colors',
-        )}
-      >
-        <span>{pageSize} per page</span>
-        <IconChevronDown size={16} color="#201E24" />
-      </button>
-
-      {open && (
-        // Menu opens UPWARD: the pagination footer sits at the bottom
-        // of the page, so a downward-opening menu would clip below the
-        // viewport.  `bottom: calc(100% + 4 px)` anchors the menu's
-        // bottom edge 4 px above the trigger's top edge — same 4 px
-        // gap that toolbar / link popovers elsewhere use.
-        //
-        // Figma 1615:521008 — "Dropdown / Image":
-        //   • container 162-px wide (min 162, max 240), rounded-4
-        //   • py-8 outer, ul has px-8 gutter so each row is INSET from the
-        //     container edge by 8 px on each side
-        //   • each row px-16 py-8 → 18-px line-height + 16-px label gap
-        //   • selected row: bg #EDEAFF rounded-4, label remains #201E24,
-        //     trailing 16-px purple check icon (#4D36FF)
-        //   • inactive: bg-white, label #201E24, no trailing icon
-        //   • shadow is a 1-px translucent ring (`0 0 0 1px rgba(32,30,36,0.1)`)
-        //     plus a soft drop (`0 12px 8px -4px rgba(32,30,36,0.15)`) — NO
-        //     border, the ring IS the border so it doesn't double up.
-        <ul
-          data-per-page-menu
-          role="listbox"
-          aria-label="Items per page"
-          className={cn(
-            'absolute left-0 z-30 min-w-[162px] max-w-[240px]',
-            'bg-white rounded-[4px] overflow-hidden',
-            'flex flex-col items-start py-[8px] px-[8px]',
-          )}
-          style={{
-            bottom: 'calc(100% + 4px)',
-            boxShadow:
-              '0px 0px 0px 1px rgba(32,30,36,0.1), 0px 12px 8px -4px rgba(32,30,36,0.15)',
-            fontFamily: 'IBM Plex Sans, sans-serif',
-          }}
-        >
-          {PAGE_SIZE_OPTIONS.map((opt) => {
-            const active = opt === pageSize;
-            return (
-              <li key={opt} className="w-full">
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={active}
-                  onClick={() => {
-                    onChange(opt);
-                    setOpen(false);
-                  }}
-                  className={cn(
-                    'w-full flex items-center gap-[16px] px-[16px] py-[8px] rounded-[4px]',
-                    'text-[12px] leading-[18px] font-normal text-[#201E24]',
-                    'bg-white hover:bg-[#EDEAFF] transition-colors',
-                  )}
-                >
-                  <span className="flex-1 min-w-0 text-left truncate">
-                    {opt} per page
-                  </span>
-                  {active && (
-                    // 16-px purple check glyph — Figma uses the standard
-                    // check_sm vector (683:998) tinted with the brand
-                    // primary so the row reads as "selected" without
-                    // tinting the label itself.
-                    <IconCheck size={16} color="#4D36FF" />
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function Chevron({
-  direction,
-  disabled,
-}: {
-  direction: 'left' | 'right';
-  disabled?: boolean;
-}) {
-  // Use the IconChevronRight glyph for both directions, rotated 180°
-  // when we need a left-facing chevron — keeps a single source of
-  // truth for the chevron path.
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        transform: direction === 'left' ? 'rotate(180deg)' : undefined,
-      }}
-    >
-      <IconChevronRight size={16} color={disabled ? '#908F92' : '#201E24'} />
-    </span>
-  );
-}
 
 // ── Column header ──────────────────────────────────────────────────────────
 
@@ -955,10 +415,38 @@ interface ColumnHeaderProps {
   label: string;
   sortKey: SortKey;
   state: SortState;
+  /** When false the header is a static label — no sort glyph, no
+   *  click target, no hover affordance. Driven by the `sorting`
+   *  feature flag in the Scenario Switcher. */
+  sortable: boolean;
   onSort: (key: SortKey) => void;
 }
 
-function ColumnHeader({ className, label, sortKey, state, onSort }: ColumnHeaderProps) {
+function ColumnHeader({
+  className,
+  label,
+  sortKey,
+  state,
+  sortable,
+  onSort,
+}: ColumnHeaderProps) {
+  // Static (non-sortable) variant — render as a plain label with no
+  // glyph, no cursor, no click handler.  Same column class so the row
+  // still aligns with the body.
+  if (!sortable) {
+    return (
+      <div
+        className={cn(
+          className,
+          'flex items-center text-left',
+          'text-[14px] leading-[18px] font-medium tracking-[0.07px] text-[#626165]',
+        )}
+      >
+        <span>{label}</span>
+      </div>
+    );
+  }
+
   const active = state.key === sortKey;
   // Per Figma 830:44403 ("Sorting states") the GLYPH itself swaps with
   // sort state — not just the color:

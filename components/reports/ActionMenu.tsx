@@ -58,6 +58,11 @@ export type ReportAction = 'open' | 'share' | 'rename' | 'duplicate' | 'delete';
 
 interface ActionMenuProps {
   onAction: (action: ReportAction) => void;
+  /** Capability flag — when false, the `Rename` row is filtered out
+   *  of the visible menu (Open / Duplicate / Delete remain). The
+   *  underlying `'rename'` action stays in `ReportAction` so re-
+   *  enabling is just flipping the flag — no broken consumers. */
+  renameEnabled?: boolean;
 }
 
 interface ItemDef {
@@ -82,9 +87,16 @@ const ITEMS: ItemDef[] = [
   { action: 'delete',    label: 'Delete',    Icon: IconTrash, dividerAbove: true },
 ];
 
-export function ActionMenu({ onAction }: ActionMenuProps) {
+export function ActionMenu({ onAction, renameEnabled = false }: ActionMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  // Filter the static ITEMS list down to what the current capability
+  // flags actually expose.  Memo not necessary — list is tiny and the
+  // filter runs only when the menu re-renders.
+  const visibleItems = ITEMS.filter(
+    (it) => it.action !== 'rename' || renameEnabled,
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -138,7 +150,7 @@ export function ActionMenu({ onAction }: ActionMenuProps) {
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          {ITEMS.map((it) => {
+          {visibleItems.map((it) => {
             const Icon = it.Icon;
             return (
               <div key={it.action}>

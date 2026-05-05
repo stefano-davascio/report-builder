@@ -236,10 +236,11 @@ export const FILTERED_INITIAL_FILTER_IDS: ReadonlySet<string> = new Set([
 export interface ReportsScenarioRender {
   /** Rows the table should render. */
   reports: MockReport[];
-  /** Show the search input above the table. */
-  searchEnabled: boolean;
-  /** Show the pagination footer below the table. */
-  paginationEnabled: boolean;
+  /** Show the Filter trigger above the table.  True only when the
+   *  list is long enough that filtering meaningfully narrows it
+   *  (many / filtered).  False for empty + few — three rows fit on
+   *  one screen and a Filter trigger would just clutter the row. */
+  filterEnabled: boolean;
   /** Filter chip ids to pre-select when the table mounts. */
   initialFilters?: ReadonlySet<string>;
 }
@@ -247,16 +248,15 @@ export interface ReportsScenarioRender {
 export function reportsForScenario(state: ReportListState): ReportsScenarioRender {
   switch (state) {
     case 'empty':
-      return { reports: [], searchEnabled: false, paginationEnabled: false };
+      return { reports: [], filterEnabled: false };
     case 'few':
-      return { reports: FEW_REPORTS, searchEnabled: false, paginationEnabled: false };
+      return { reports: FEW_REPORTS, filterEnabled: false };
     case 'many':
-      return { reports: MANY_REPORTS, searchEnabled: true, paginationEnabled: true };
+      return { reports: MANY_REPORTS, filterEnabled: true };
     case 'filtered':
       return {
         reports: FILTERED_REPORTS,
-        searchEnabled: true,
-        paginationEnabled: true,
+        filterEnabled: true,
         initialFilters: FILTERED_INITIAL_FILTER_IDS,
       };
   }

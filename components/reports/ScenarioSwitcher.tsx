@@ -26,6 +26,7 @@ import { createPortal } from 'react-dom';
 import type {
   ReportListState,
   Scenario,
+  ScenarioFeatures,
   TemplateScope,
 } from '@/lib/scenario';
 import { cn } from '@/lib/utils';
@@ -46,9 +47,17 @@ const TEMPLATE_SCOPES: { id: TemplateScope; label: string; hint: string }[] = [
 
 const REPORT_LIST_STATES: { id: ReportListState; label: string; hint: string }[] = [
   { id: 'empty',    label: 'Empty',     hint: 'no reports — first-run state' },
-  { id: 'few',      label: 'Few',       hint: '3 reports — no search / pagination' },
-  { id: 'many',     label: 'Many',      hint: '25+ reports — search + pagination' },
-  { id: 'filtered', label: 'Filtered',  hint: 'pre-applied filter chip' },
+  { id: 'few',      label: 'Few',       hint: '3 reports — no Filter trigger' },
+  { id: 'many',     label: 'Many',      hint: '99 reports — Filter trigger visible' },
+  { id: 'filtered', label: 'Filtered',  hint: 'many + a pre-applied filter chip' },
+];
+
+// Independent capability flags. Unlike the radio sections above, both
+// flags are toggled with checkboxes — they're orthogonal and any
+// combination is valid (Rename on / Sorting off, both on, etc.).
+const FEATURE_TOGGLES: { id: keyof ScenarioFeatures; label: string; hint: string }[] = [
+  { id: 'rename',  label: 'Rename',  hint: 'pencil glyph + Rename row in the more-options menu' },
+  { id: 'sorting', label: 'Sorting', hint: 'sort indicator icons + clickable column headers' },
 ];
 
 export function ScenarioSwitcher({ scenario, onChange }: ScenarioSwitcherProps) {
@@ -74,6 +83,13 @@ export function ScenarioSwitcher({ scenario, onChange }: ScenarioSwitcherProps) 
     onChange({ ...scenario, reportListState: next });
   };
 
+  const handleFeatureToggle = (key: keyof ScenarioFeatures) => {
+    onChange({
+      ...scenario,
+      features: { ...scenario.features, [key]: !scenario.features[key] },
+    });
+  };
+
   return createPortal(
     <div
       // Full-viewport overlay — neither participates in page layout
@@ -91,6 +107,7 @@ export function ScenarioSwitcher({ scenario, onChange }: ScenarioSwitcherProps) 
           scenario={scenario}
           onTemplateScope={handleTemplateScope}
           onReportListState={handleReportListState}
+          onFeatureToggle={handleFeatureToggle}
           onCollapse={() => setOpen(false)}
         />
       ) : (
@@ -142,6 +159,7 @@ interface ExpandedPanelProps {
   scenario: Scenario;
   onTemplateScope: (next: TemplateScope) => void;
   onReportListState: (next: ReportListState) => void;
+  onFeatureToggle: (key: keyof ScenarioFeatures) => void;
   onCollapse: () => void;
 }
 
@@ -149,6 +167,7 @@ function ExpandedPanel({
   scenario,
   onTemplateScope,
   onReportListState,
+  onFeatureToggle,
   onCollapse,
 }: ExpandedPanelProps) {
   // Drag state lives entirely inside this component — when the panel
@@ -336,6 +355,21 @@ function ExpandedPanel({
           />
         ))}
       </Section>
+
+      {/* Features — checkboxes (NOT radios) since the flags are
+          orthogonal: any combination of {rename, sorting} ∈ {on, off}
+          is valid. Both default OFF on first visit. */}
+      <Section title="Features">
+        {FEATURE_TOGGLES.map((opt) => (
+          <CheckboxRow
+            key={opt.id}
+            checked={scenario.features[opt.id]}
+            label={opt.label}
+            hint={opt.hint}
+            onChange={() => onFeatureToggle(opt.id)}
+          />
+        ))}
+      </Section>
     </div>
   );
 }
@@ -382,6 +416,43 @@ function RadioRow({ checked, label, hint, onChange, name }: RadioRowProps) {
       <input
         type="radio"
         name={name}
+        checked={checked}
+        onChange={onChange}
+        className="accent-[#7A6500]"
+      />
+      <span
+        className={cn(
+          'flex-1 min-w-0 text-[12px] leading-[16px] text-[#3A3000]',
+          checked ? 'font-semibold' : 'font-normal',
+        )}
+      >
+        {label}
+      </span>
+    </label>
+  );
+}
+
+// CheckboxRow — visually identical to RadioRow but uses an
+// independent `<input type="checkbox">`.  Used by the Features
+// section where each toggle is orthogonal (no shared `name` group).
+interface CheckboxRowProps {
+  checked: boolean;
+  label: string;
+  hint: string;
+  onChange: () => void;
+}
+
+function CheckboxRow({ checked, label, hint, onChange }: CheckboxRowProps) {
+  return (
+    <label
+      title={hint}
+      className={cn(
+        'flex items-center gap-2 px-2 py-[3px] rounded cursor-pointer transition-colors',
+        'hover:bg-[#FFF8C7]',
+      )}
+    >
+      <input
+        type="checkbox"
         checked={checked}
         onChange={onChange}
         className="accent-[#7A6500]"

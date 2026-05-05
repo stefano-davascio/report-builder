@@ -21,6 +21,7 @@
  */
 
 import { MockReport, REPORT_TEMPLATES, ReportTemplate } from '@/lib/reports-data';
+import type { ScenarioFeatures } from '@/lib/scenario';
 import { TopAppBar } from './TopAppBar';
 import { BuildNewReportSection } from './BuildNewReportSection';
 import { ReportsTable } from './ReportsTable';
@@ -40,9 +41,11 @@ interface ReportsLandingPageProps {
   /** Forwarded straight through to ReportsTable — see that component
    *  for the semantics of each. Optional so the production caller can
    *  omit them and get the existing default behavior. */
-  searchEnabled?: boolean;
-  paginationEnabled?: boolean;
+  filterEnabled?: boolean;
   initialFilters?: ReadonlySet<string>;
+  /** Capability flags for in-development surfaces (rename, sorting).
+   *  Threaded through to ReportsTable + ReportRow + ColumnHeader. */
+  features?: ScenarioFeatures;
   /** When the underlying scenario changes the parent passes a new key
    *  here; we forward it onto ReportsTable so the table fully remounts
    *  (clearing search query, page index, and any user-applied filters)
@@ -58,9 +61,9 @@ export function ReportsLandingPage({
   onDuplicate,
   onDelete,
   templates = REPORT_TEMPLATES,
-  searchEnabled,
-  paginationEnabled,
+  filterEnabled,
   initialFilters,
+  features,
   scenarioKey,
 }: ReportsLandingPageProps) {
   return (
@@ -109,9 +112,9 @@ export function ReportsLandingPage({
           onRename={onRename}
           onDuplicate={onDuplicate}
           onDelete={onDelete}
-          searchEnabled={searchEnabled}
-          paginationEnabled={paginationEnabled}
+          filterEnabled={filterEnabled}
           initialFilters={initialFilters}
+          features={features}
         />
       </main>
     </div>

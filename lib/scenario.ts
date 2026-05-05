@@ -28,18 +28,36 @@ import { useEffect, useState } from 'react';
 /** Carousel scope — drives which Build-a-new-report cards show. */
 export type TemplateScope = 'full' | 'beta';
 
-/** Reports table state — drives data + list-level chrome (search,
- *  pagination, filter chips). */
+/** Reports table state — drives data + list-level chrome (filter chips). */
 export type ReportListState = 'empty' | 'few' | 'many' | 'filtered';
+
+/** Independent UI capability flags.  Each one gates a surface that's
+ *  built but not yet ready to ship — toggling exposes it for review
+ *  without removing any code. Default OFF (production scope) on first
+ *  visit; persisted to localStorage like the rest of the scenario. */
+export interface ScenarioFeatures {
+  /** Pencil icon next to the report name + 'Rename' row in the row's
+   *  more-options menu. Off by default — rename is opt-in. */
+  rename: boolean;
+  /** Sortable column headers (sort indicator icons + click-to-cycle
+   *  behavior). Off by default — header rows are static labels until
+   *  flipped on. */
+  sorting: boolean;
+}
 
 export interface Scenario {
   templateScope: TemplateScope;
   reportListState: ReportListState;
+  features: ScenarioFeatures;
 }
 
 const DEFAULT_SCENARIO: Scenario = {
   templateScope: 'full',
   reportListState: 'few',
+  features: {
+    rename: false,
+    sorting: false,
+  },
 };
 
 const STORAGE_KEY = 'report-builder.scenario.v1';
@@ -66,7 +84,14 @@ function readPersisted(): Scenario {
       parsed.reportListState === 'filtered'
         ? parsed.reportListState
         : DEFAULT_SCENARIO.reportListState;
-    return { templateScope, reportListState };
+    // Feature flags — coerce to boolean so any garbage value (string,
+    // null, undefined, missing field on older payloads) collapses to
+    // the default-OFF state instead of leaking truthy junk into the UI.
+    const features: ScenarioFeatures = {
+      rename: parsed.features?.rename === true,
+      sorting: parsed.features?.sorting === true,
+    };
+    return { templateScope, reportListState, features };
   } catch {
     return DEFAULT_SCENARIO;
   }
@@ -84,13 +109,18 @@ function readPersisted(): Scenario {
 export function useScenario(): [Scenario, (next: Scenario) => void] {
   const [scenario, setScenarioState] = useState<Scenario>(DEFAULT_SCENARIO);
 
-  // Hydrate from localStorage on mount.
+  // Hydrate from localStorage on mount.  We always update if the
+  // persisted object differs in any field — including the feature
+  // flags — so a designer who flipped Rename on yesterday gets the
+  // same view back today.
   useEffect(() => {
     const persisted = readPersisted();
-    if (
+    const differs =
       persisted.templateScope !== DEFAULT_SCENARIO.templateScope ||
-      persisted.reportListState !== DEFAULT_SCENARIO.reportListState
-    ) {
+      persisted.reportListState !== DEFAULT_SCENARIO.reportListState ||
+      persisted.features.rename !== DEFAULT_SCENARIO.features.rename ||
+      persisted.features.sorting !== DEFAULT_SCENARIO.features.sorting;
+    if (differs) {
       setScenarioState(persisted);
     }
   }, []);

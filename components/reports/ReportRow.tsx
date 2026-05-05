@@ -35,6 +35,13 @@ import { cn } from '@/lib/utils';
 interface ReportRowProps {
   report: MockReport;
   isLast: boolean;
+  /** Capability flag — when false, the hover-revealed pencil button
+   *  beside the name is suppressed AND the action menu's `Rename` row
+   *  is hidden (gated downstream in ActionMenu via `renameEnabled`).
+   *  All rename machinery (state, input, commit/cancel handlers) is
+   *  preserved so flipping the flag back on restores the full flow
+   *  with no code changes.  Defaults to false (production scope). */
+  renameEnabled?: boolean;
   /** Force the row into rename mode (e.g. from the action menu). */
   renaming: boolean;
   onStartRename: () => void;
@@ -69,6 +76,7 @@ const COL = REPORT_ROW_COLUMNS;
 export function ReportRow({
   report,
   isLast,
+  renameEnabled = false,
   renaming,
   onStartRename,
   onCommitRename,
@@ -199,7 +207,7 @@ export function ReportRow({
                 </span>
               )}
             </div>
-            {hovered && (
+            {hovered && renameEnabled && (
               <button
                 type="button"
                 onClick={(e) => {
@@ -262,7 +270,7 @@ export function ReportRow({
           32-px button: (80 − 32) / 2 = 24 px breathing space per side,
           matching Figma's intent within a single px. */}
       <div className={cn(COL.actions, 'flex items-center justify-center')} onClick={stop}>
-        <ActionMenu onAction={onAction} />
+        <ActionMenu onAction={onAction} renameEnabled={renameEnabled} />
       </div>
     </div>
   );
