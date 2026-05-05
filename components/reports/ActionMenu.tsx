@@ -50,7 +50,7 @@ import {
   IconPencil,
   IconCopy,
   IconTrash,
-  IconExternalLink,
+  // IconExternalLink — re-import when re-enabling the Share row below.
 } from '@/components/icons/SendiIcons';
 import { cn } from '@/lib/utils';
 
@@ -70,13 +70,13 @@ interface ItemDef {
 
 const ITEMS: ItemDef[] = [
   { action: 'open',      label: 'Open',      Icon: IconArrowUpRight },
-  // `Share` sits directly below `Open` — both are read-only "send the
-  // user somewhere else with this report" affordances, so they group
-  // visually before the mutating actions (Rename / Duplicate / Delete).
-  // Glyph is `external_link` (boxed frame + escaping arrow) rather than
-  // the social share-fan: the row-menu Share routes the user OUT to a
-  // share surface, so the "opens elsewhere" metaphor reads better.
-  { action: 'share',     label: 'Share',     Icon: IconExternalLink },
+  // Share is hidden for now — the share surface it routes to isn't
+  // wired yet, and we'd rather have a clean menu than a dead-end
+  // entry. Re-enable by adding the row back here:
+  //   { action: 'share', label: 'Share', Icon: IconExternalLink },
+  // It would sit directly below `Open` (both are read-only "send the
+  // user elsewhere" affordances) and use IconExternalLink — the
+  // boxed-frame-with-escaping-arrow glyph, not the social share-fan.
   { action: 'rename',    label: 'Rename',    Icon: IconPencil },
   { action: 'duplicate', label: 'Duplicate', Icon: IconCopy },
   { action: 'delete',    label: 'Delete',    Icon: IconTrash, dividerAbove: true },
