@@ -291,8 +291,13 @@ export function ReportsTable({
                 rounded-4, 1-px border #201E24 @ 20%, gap-7 between
                 icon and label, IconPlusCircle 16 px (Figma uses 16-tile
                 "Add filter icon"), 12/21 Medium #201E24 label.
-                Hidden when the source list is empty. */}
-            {!isSourceEmpty && (
+                Visible only when `searchEnabled` — the same gate the
+                search input uses.  Both surfaces are "narrow a long
+                list" affordances and only make sense in scenarios
+                that *have* a long list (many / filtered).  In the
+                `few` scenario (3 rows) and `empty` scenario the
+                filter is hidden so it doesn't clutter the row. */}
+            {searchEnabled && (
               <FilterDropdown
                 options={FILTER_OPTIONS}
                 selectedIds={selectedFilters}
@@ -315,8 +320,11 @@ export function ReportsTable({
               />
             )}
 
-            {/* Filter chips — same row as the trigger. */}
-            {!isSourceEmpty && chips.length > 0 && (
+            {/* Filter chips — same row as the trigger.  Gated on the
+                same `searchEnabled` flag as the trigger above so the
+                chips can never outlive the trigger they're spawned
+                from (e.g. switching scenario from filtered → few). */}
+            {searchEnabled && chips.length > 0 && (
               <div className="flex items-center gap-[8px] flex-wrap">
                 {chips.map((c) => (
                   <button
