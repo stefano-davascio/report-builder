@@ -418,7 +418,14 @@ export function ReportsTable({
           no columns to label).
           Inside the sticky wrapper above so the strip travels with
           the section header as the user scrolls (Figma 1585:461063). */}
-        {!isSourceEmpty && (
+        {/* Hide the column-header strip whenever the BODY would be
+            empty — both for the source-empty case (no reports
+            authored) AND the filtered-to-zero case (active filters
+            produced no matches).  The empty-state tile that paints
+            in the body already carries the "No matches" / "No
+            reports yet" messaging, so dangling column headers above
+            it would just be visual noise. */}
+        {sorted.length > 0 && (
           <div className="flex items-center h-[48px] border-b border-[#F3F3F4]">
             <ColumnHeader
               className={REPORT_ROW_COLUMNS.name}
