@@ -369,23 +369,16 @@ const PANEL_CHROME = 'bg-white rounded-[4px] overflow-hidden';
 const PANEL_SHADOW =
   '0 0 0 1px #D2D2D3, 0 12px 8px -4px rgba(32,30,36,0.15), 0 4px 4px -2px rgba(32,30,36,0.2)';
 
-// Search-input chrome shared across every panel.  Two visual states
-// — at rest the box has a subtle 5%-tinted fill; on focus it flips
-// to white with a brand-purple border + a translucent purple focus
-// ring, matching the standalone SearchBar's Click/Typing chrome
-// (Figma 1670:42280 + 1583:461048).  Border lives INSIDE the
-// 32-px height — `border` always renders so the focus transition
-// doesn't shift the box width by 2 px.
+// Search-input chrome shared across every panel.  Per Figma
+// 1670:42280 the focused state is JUST a 1-px brand-purple border
+// stroke around the existing tinted box — no fill change, no focus
+// ring shadow.  Border always renders (transparent at rest) so
+// flipping its color on focus doesn't shift box width by 2 px.
 const SEARCH_INPUT_WRAP = cn(
   'flex items-center gap-[8px] h-[32px] px-[8px] rounded-[4px]',
-  'border transition-colors',
-  // At rest: gray fill + transparent border (no visible outline).
-  // Focused: white fill + brand-purple border. The focus-ring shadow
-  // is applied inline below since Tailwind's focus-within: variant
-  // can't carry a custom box-shadow and gracefully no-op on rest.
-  'bg-[rgba(32,30,36,0.05)] border-transparent',
-  'focus-within:bg-white focus-within:border-[#4D36FF]',
-  'focus-within:shadow-[0_0_0_2px_rgba(77,54,255,0.25)]',
+  'bg-[rgba(32,30,36,0.05)]',
+  'border border-transparent transition-colors',
+  'focus-within:border-[#4D36FF]',
 );
 const SEARCH_INPUT_FIELD = cn(
   'flex-1 min-w-0 bg-transparent border-0 outline-none',
