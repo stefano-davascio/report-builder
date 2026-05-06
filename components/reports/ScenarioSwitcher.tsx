@@ -49,7 +49,6 @@ const REPORT_LIST_STATES: { id: ReportListState; label: string; hint: string }[]
   { id: 'empty',    label: 'Empty',     hint: 'no reports — first-run state' },
   { id: 'few',      label: 'Few',       hint: '3 reports — no Filter trigger' },
   { id: 'many',     label: 'Many',      hint: '50 reports — Filter trigger visible' },
-  { id: 'filtered', label: 'Filtered',  hint: 'many + a pre-applied filter chip' },
 ];
 
 // Independent capability flags. Unlike the radio sections above, both

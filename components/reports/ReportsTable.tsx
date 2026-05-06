@@ -23,7 +23,7 @@
  *     not-sorted → desc → asc → not-sorted (third click clears)
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { MockReport } from '@/lib/reports-data';
 import type { ScenarioFeatures } from '@/lib/scenario';
 import type { Platform } from '@/types';
@@ -160,6 +160,19 @@ export function ReportsTable({
   // trigger and chip clicks all flip this to a specific view value;
   // outside-click + Escape inside FilterDropdown flip it back to null.
   const [filterView, setFilterView] = useState<FilterDropdownView | null>(null);
+
+  // Chip-anchored popover element.  When non-null, FilterDropdown
+  // anchors its popover to this element (a chip span) instead of the
+  // internal Filter trigger button — so clicking a chip opens the
+  // editor directly under the chip per Figma 1674:44910.  Auto-cleared
+  // whenever the user opens via the trigger (`view === 'top'`) or the
+  // dropdown closes (`view === null`).
+  const [chipAnchorEl, setChipAnchorEl] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    if (filterView === 'top' || filterView === null) {
+      setChipAnchorEl(null);
+    }
+  }, [filterView]);
   // Initial sort intentionally has NO active key — every column should
   // render with the neutral `IconSortUpDown` glyph until the user
   // clicks one. The mock data is already in modifiedAt-desc order at
@@ -299,6 +312,13 @@ export function ReportsTable({
               Reports
             </h2>
 
+            {/* Filter button + chips share an inner flex with gap-8.
+                Per Figma 1674:45008 the Filter trigger and the chip
+                row sit 8 px apart — TIGHTER than the 16 px between
+                "Reports" and the Filter button. We can't express that
+                with a single flex `gap` on the parent, so we nest. */}
+            <div className="flex items-center gap-[8px] flex-wrap gap-y-[8px]">
+
             {/* Filter trigger — Figma 1597:463766 / 797:42255: h-32,
                 px-13, rounded-4, 1-px border #201E24 @ 20%, gap-7
                 between icon and label, IconPlusCircle 16 px, 12/21
@@ -315,6 +335,7 @@ export function ReportsTable({
                 onNameContainsChange={setNameContains}
                 view={filterView}
                 onViewChange={setFilterView}
+                popoverAnchorEl={chipAnchorEl}
                 renderTrigger={(open) => (
                   <span
                     className={cn(
@@ -355,12 +376,20 @@ export function ReportsTable({
                 inside the Network chip; that affordance lives in the
                 sub-selector's checkboxes). */}
             {filterEnabled && hasAnyFilter && (
-              <div className="flex items-center gap-[8px] flex-wrap">
+              <>
                 {selectedNetworks.size > 0 && (
                   <NetworkChip
                     networks={[...selectedNetworks]}
-                    onClick={() => setFilterView('networks')}
-                    onRemove={() => setSelectedNetworks(new Set())}
+                    onChipClick={(el) => {
+                      setChipAnchorEl(el);
+                      setFilterView('networks');
+                    }}
+                    onRemove={() => {
+                      setSelectedNetworks(new Set());
+                      // Closing the dropdown when its anchor unmounts
+                      // avoids a stale-ref popover stuck at top:0,left:0.
+                      setFilterView(null);
+                    }}
                   />
                 )}
                 {selectedUsers.size > 0 && (
@@ -368,15 +397,27 @@ export function ReportsTable({
                     users={[...selectedUsers]
                       .map((id) => DEFAULT_AVAILABLE_USERS.find((u) => u.id === id))
                       .filter((u): u is FilterUser => Boolean(u))}
-                    onClick={() => setFilterView('users')}
-                    onRemove={() => setSelectedUsers(new Set())}
+                    onChipClick={(el) => {
+                      setChipAnchorEl(el);
+                      setFilterView('users');
+                    }}
+                    onRemove={() => {
+                      setSelectedUsers(new Set());
+                      setFilterView(null);
+                    }}
                   />
                 )}
                 {nameContains && (
                   <NameContainsChip
                     value={nameContains}
-                    onClick={() => setFilterView('name-edit')}
-                    onRemove={() => setNameContains(null)}
+                    onChipClick={(el) => {
+                      setChipAnchorEl(el);
+                      setFilterView('name-edit');
+                    }}
+                    onRemove={() => {
+                      setNameContains(null);
+                      setFilterView(null);
+                    }}
                   />
                 )}
                 {/* Clear all — only visible when there are MULTIPLE
@@ -392,15 +433,24 @@ export function ReportsTable({
                     type="button"
                     onClick={clearAllFilters}
                     className={cn(
-                      'text-[12px] leading-[21px] font-medium text-[#626165]',
-                      'hover:text-[#201E24] transition-colors cursor-pointer',
+                      // Per Figma 1689:76861 the Clear all action is a
+                      // pill-shaped neutral button — same h-32 / px-12
+                      // / rounded-4 / 12-21 Medium #201E24 chrome as
+                      // the Filter trigger.  Default surface is
+                      // transparent; hover paints rgba(32,30,36,0.05).
+                      'h-[32px] min-w-[32px] px-[12px] rounded-[4px]',
+                      'inline-flex items-center justify-center',
+                      'bg-transparent hover:bg-[rgba(32,30,36,0.05)]',
+                      'text-[12px] leading-[21px] font-medium text-[#201E24]',
+                      'transition-colors cursor-pointer',
                     )}
                   >
                     Clear all
                   </button>
                 )}
-              </div>
+              </>
             )}
+            </div>{/* /Filter button + chips inner flex */}
           </div>
 
           {/* Standalone search input is removed entirely — search now
@@ -475,11 +525,11 @@ export function ReportsTable({
           the first-run "No reports yet" copy. */}
       {sorted.length === 0 ? (
         <EmptyState
-          title={reports.length === 0 ? 'No reports yet' : 'No matches'}
+          title={reports.length === 0 ? 'No reports yet' : 'No matching report'}
           description={
             reports.length === 0
               ? 'Build your first report from a template above.'
-              : 'Try removing a filter or two to see more reports.'
+              : 'Try a different filter or keyword'
           }
         />
       ) : (
@@ -523,38 +573,57 @@ export function ReportsTable({
 
 // ── Filter chips ────────────────────────────────────────────────────────────
 //
-// Figma 1674:43486 / 44025 / 44394 / 44910 — three chip shapes that
-// share a common pill chrome (h-32 px-12 rounded-4 1-px #E8E8E9
-// border, white bg). Each chip has a clickable label region (opens
-// the relevant editor) + a trailing × button that removes the filter
-// without opening the editor.
+// Figma 1674:44910 / 1674:45024 — three chip shapes that share a
+// common chrome:  bg #F3F3F4 (NEUTRAL surface, no border), h-32,
+// rounded-4, asymmetric padding (pl-8 pr-4 py-4) so the trailing X
+// button can sit flush.  Gap-4 between label / value / X.
+//
+// Label is 12 / 22 Medium #201E24; value (e.g. "facebook" in the
+// Name contains chip, or platform glyphs / initials in the others)
+// is 12.8 / 19.2 Regular #363439 per Figma 1674:45032.
+//
+// Each chip has a clickable label region (opens the relevant editor)
+// + a trailing × button that removes the filter without opening the
+// editor.  `onChipClick` receives the chip's element so the parent
+// can anchor the FilterDropdown popover directly under it.
 //
 // `onRemove` stops event propagation so the X button doesn't also
 // fire the chip's "open editor" behavior.
 
 const CHIP_BASE = cn(
-  'h-[32px] px-[12px] rounded-[4px] inline-flex items-center gap-[8px]',
-  'border border-[#E8E8E9] bg-white',
-  'text-[12px] leading-[21px] font-medium text-[#201E24]',
-  'hover:bg-[#F3F3F4] transition-colors cursor-pointer',
+  'h-[32px] pl-[8px] pr-[4px] py-[4px] rounded-[4px]',
+  'inline-flex items-center gap-[4px]',
+  'bg-[#F3F3F4]',
+  'text-[12px] leading-[22px] font-medium text-[#201E24]',
+  // Per Figma 1689:76876 the chip surface stays neutral on hover —
+  // there's no chip-level fill change.  Only the trailing X button
+  // gets its own hover treatment (see ChipRemoveButton).
+  'cursor-pointer',
+);
+
+// Trailing label (the value half of the chip — platform glyphs,
+// initials, or the "facebook" string) — softer color + slightly
+// larger size per Figma 1674:45032.
+const CHIP_VALUE_TEXT = cn(
+  'text-[12.8px] leading-[19.2px] font-normal text-[#363439]',
 );
 
 interface NetworkChipProps {
   networks: Platform[];
-  onClick: () => void;
+  onChipClick: (el: HTMLElement) => void;
   onRemove: () => void;
 }
 
-function NetworkChip({ networks, onClick, onRemove }: NetworkChipProps) {
+function NetworkChip({ networks, onChipClick, onRemove }: NetworkChipProps) {
   return (
     <span
       role="button"
       tabIndex={0}
-      onClick={onClick}
+      onClick={(e) => onChipClick(e.currentTarget)}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          onClick();
+          onChipClick(e.currentTarget);
         }
       }}
       className={CHIP_BASE}
@@ -568,9 +637,7 @@ function NetworkChip({ networks, onClick, onRemove }: NetworkChipProps) {
           </span>
         ))}
         {networks.length > 3 && (
-          <span className="text-[12px] leading-[16px] text-[#626165]">
-            +{networks.length - 3}
-          </span>
+          <span className={CHIP_VALUE_TEXT}>+{networks.length - 3}</span>
         )}
       </span>
       <ChipRemoveButton onRemove={onRemove} />
@@ -580,42 +647,40 @@ function NetworkChip({ networks, onClick, onRemove }: NetworkChipProps) {
 
 interface UserChipProps {
   users: FilterUser[];
-  onClick: () => void;
+  onChipClick: (el: HTMLElement) => void;
   onRemove: () => void;
 }
 
-function UserChip({ users, onClick, onRemove }: UserChipProps) {
+function UserChip({ users, onChipClick, onRemove }: UserChipProps) {
+  // Mirror the Name-contains chip pattern: render the user's actual
+  // name as the value half (softer 12.8 / 19.2 / #363439 text),
+  // alongside the bolder "User" label.  When multiple users are
+  // selected, show the first name + a "+N" overflow indicator so the
+  // chip stays compact — same as how the Network chip handles overflow.
+  const first = users[0];
   return (
     <span
       role="button"
       tabIndex={0}
-      onClick={onClick}
+      onClick={(e) => onChipClick(e.currentTarget)}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          onClick();
+          onChipClick(e.currentTarget);
         }
       }}
       className={CHIP_BASE}
       aria-label="Edit User filter"
     >
       <span>User</span>
-      <span className="flex items-center gap-[4px]">
-        {users.slice(0, 3).map((u) => (
-          <span
-            key={u.id}
-            className="inline-flex items-center justify-center w-[16px] h-[16px] rounded-[3px] bg-[#4D36FF] text-white"
-            style={{ fontSize: 9, fontWeight: 600, lineHeight: 1 }}
-          >
-            {u.initials.slice(0, 2).toUpperCase()}
-          </span>
-        ))}
-        {users.length > 3 && (
-          <span className="text-[12px] leading-[16px] text-[#626165]">
-            +{users.length - 3}
-          </span>
-        )}
-      </span>
+      {first && (
+        <span className="flex items-center gap-[4px]">
+          <span className={CHIP_VALUE_TEXT}>{first.label}</span>
+          {users.length > 1 && (
+            <span className={CHIP_VALUE_TEXT}>+{users.length - 1}</span>
+          )}
+        </span>
+      )}
       <ChipRemoveButton onRemove={onRemove} />
     </span>
   );
@@ -623,31 +688,31 @@ function UserChip({ users, onClick, onRemove }: UserChipProps) {
 
 interface NameContainsChipProps {
   value: string;
-  onClick: () => void;
+  onChipClick: (el: HTMLElement) => void;
   onRemove: () => void;
 }
 
-function NameContainsChip({ value, onClick, onRemove }: NameContainsChipProps) {
-  // Figma 1674:44394 paints the chip with a SUBTLE distinction
-  // between the label "Name contains" (in a softer neutral) and the
-  // value (in the on-background dark) — gives the user a visual
+function NameContainsChip({ value, onChipClick, onRemove }: NameContainsChipProps) {
+  // Figma 1674:45024 / 45032 — the label "Name contains" reads as
+  // the bolder Medium-12 #201E24 token, the value renders in the
+  // softer 12.8 / 19.2 #363439 token.  Gives the user a visual
   // handle on which part is editable.
   return (
     <span
       role="button"
       tabIndex={0}
-      onClick={onClick}
+      onClick={(e) => onChipClick(e.currentTarget)}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          onClick();
+          onChipClick(e.currentTarget);
         }
       }}
       className={CHIP_BASE}
       aria-label="Edit Name contains filter"
     >
-      <span className="text-[#626165]">Name contains</span>
-      <span className="text-[#201E24]">{value}</span>
+      <span>Name contains</span>
+      <span className={CHIP_VALUE_TEXT}>{value}</span>
       <ChipRemoveButton onRemove={onRemove} />
     </span>
   );
@@ -667,11 +732,24 @@ function ChipRemoveButton({ onRemove }: { onRemove: () => void }) {
       onKeyDown={(e) => e.stopPropagation()}
       aria-label="Remove filter"
       className={cn(
-        'inline-flex items-center justify-center w-[16px] h-[16px] rounded-[2px]',
-        'text-[#201E24] hover:bg-[rgba(32,30,36,0.1)] transition-colors cursor-pointer',
+        // 24×24 hit target per Figma 1674:45033 (the Component1
+        // wrapper is size-24 rounded-4) with a 16-px close glyph
+        // inside.  Hover paints `rgba(32,30,36,0.05)` per the
+        // Component1 hover variant in Figma 1689:76876 — the only
+        // hover-state change on the chip; the chip surface itself
+        // stays neutral.
+        'inline-flex items-center justify-center w-[24px] h-[24px] rounded-[4px]',
+        'text-[#201E24] hover:bg-[rgba(32,30,36,0.05)] transition-colors cursor-pointer',
       )}
     >
-      <IconClose size={12} color="#201E24" />
+      <IconClose
+        size={16}
+        color="#201E24"
+        // Library default 1.5 with `non-scaling-stroke` renders heavier
+        // than Figma's chip-X glyph. The native asset (Figma
+        // 1674:45033) ships at 0.98 stroke — preserve that exactly.
+        className="[&_path]:[stroke-width:0.98]"
+      />
     </button>
   );
 }

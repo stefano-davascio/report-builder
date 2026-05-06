@@ -67,31 +67,19 @@ const FEW_REPORTS: MockReport[] = INITIAL_REPORTS;
  * the same row, without us having to hand-author every entry.
  */
 function generateManyReportNames(): string[] {
-  const out: string[] = [];
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December',
   ];
   const years = ['2024', '2025', '2026'];
 
-  // Monthly reports — 12 × 3 = 36
-  for (const year of years) {
-    for (const month of months) {
-      out.push(`${month} ${year} monthly report`);
-    }
-  }
-
-  // Quarterly reviews — 4 × 3 = 12
-  for (const year of years) {
-    for (let q = 1; q <= 4; q++) {
-      out.push(`Q${q} ${year} review`);
-    }
-  }
-
-  // Hand-curated mix — 51 plausible analytics / campaign titles to
-  // bring the total to 99.  Stable order so the same list always
-  // renders the same way across renders / refreshes.
-  const others = [
+  // Hand-curated mix listed FIRST so platform-named reports
+  // ('Engagement deep-dive — Facebook', 'Audience growth — Instagram
+  // only', etc.) live within the first MANY_VISIBLE_LIMIT (50) rows.
+  // Otherwise the name-contains filter ("facebook", "instagram", …)
+  // would return zero matches in the many / filtered scenarios — the
+  // reports exist but the slice cuts them off.
+  const curated = [
     'Holiday campaign — Black Friday',
     'Holiday campaign — Cyber Monday',
     'Spring product launch',
@@ -144,7 +132,22 @@ function generateManyReportNames(): string[] {
     'Posting frequency study',
     'Engagement rate by post type',
   ];
-  out.push(...others);
+
+  const out: string[] = [...curated];
+
+  // Monthly reports — 12 × 3 = 36
+  for (const year of years) {
+    for (const month of months) {
+      out.push(`${month} ${year} monthly report`);
+    }
+  }
+
+  // Quarterly reviews — 4 × 3 = 12
+  for (const year of years) {
+    for (let q = 1; q <= 4; q++) {
+      out.push(`Q${q} ${year} review`);
+    }
+  }
 
   return out;
 }

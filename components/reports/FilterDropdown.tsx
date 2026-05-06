@@ -35,7 +35,15 @@
  * dropdown doesn't lose work-in-progress filters.
  */
 
-import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { createPortal } from 'react-dom';
 import type { Platform } from '@/types';
 import { PlatformIcon } from '@/components/report/PlatformIcon';
 import { IconChevronRight, IconSearch } from '@/components/icons/SendiIcons';
@@ -85,6 +93,14 @@ export interface FilterDropdownProps {
   /** Anchored content — the trigger button.  Receives `(open)` so the
    *  parent can switch styling when the dropdown is open. */
   renderTrigger?: (open: boolean) => ReactNode;
+
+  /** External anchor element.  When set, the popover is positioned
+   *  underneath this element instead of underneath the internal Filter
+   *  trigger.  Used by the chip-click flow so the Network / User /
+   *  Name-contains editors open directly under the chip the user
+   *  clicked (Figma 1674:44910).  Pass `null` (or omit) to fall back
+   *  to anchoring under the Filter trigger button. */
+  popoverAnchorEl?: HTMLElement | null;
 }
 
 // ── Network labels (display strings) ─────────────────────────────────────
@@ -118,6 +134,7 @@ export function FilterDropdown({
   view,
   onViewChange,
   renderTrigger,
+  popoverAnchorEl = null,
 }: FilterDropdownProps) {
   const open = view !== null;
 
@@ -143,19 +160,110 @@ export function FilterDropdown({
   const drilledFromTopRef = useRef(false);
 
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const topInputRef = useRef<HTMLInputElement>(null);
   const subInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Popover positioning ─────────────────────────────────────────────────
+  // The popover renders via createPortal and `position: fixed` so it
+  // can anchor either to the internal Filter trigger button OR to an
+  // external chip element (`popoverAnchorEl`).  Portaling escapes the
+  // sticky `<section>` wrapper so the popover doesn't get clipped, and
+  // fixed positioning lets us use viewport coordinates directly from
+  // `getBoundingClientRect()`.  Position recomputes on scroll + resize
+  // so the popover follows the chip as the user scrolls past the
+  // sticky activation point.
+  const [popoverPos, setPopoverPos] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+  useLayoutEffect(() => {
+    if (!open) {
+      setPopoverPos(null);
+      return;
+    }
+    const anchor = popoverAnchorEl ?? triggerRef.current;
+    if (!anchor) return;
+    const update = () => {
+      const rect = anchor.getBoundingClientRect();
+      setPopoverPos({
+        top: rect.bottom + 4,
+        left: rect.left,
+      });
+    };
+    update();
+    // Capture-phase scroll listener catches scroll events from any
+    // ancestor scroll container, not just `window` — needed because
+    // the table sits inside a sticky chrome wrapper that may scroll
+    // independently.
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [open, popoverAnchorEl]);
+
+  // ── Hover-intent close ──────────────────────────────────────────────────
+  // The Network / User row's highlight and its submenu are a single
+  // atomic state — both visible while the cursor is inside the row OR
+  // its submenu, both gone the instant the cursor leaves both regions.
+  //
+  // Implementation: when the cursor exits a row OR a submenu, we
+  // schedule a close on a short timer. Re-entering either region (or
+  // the 4-px gap traversal between them) cancels the timer. Hovering
+  // a sibling row (Network → User) cancels then re-opens to that row.
+  // Hovering the search input lets the timer expire so the drill
+  // collapses back to `'top'`.
+  //
+  // 80 ms is long enough to bridge the flex `gap-[4px]` between the
+  // top panel and submenu — measured at typical cursor speeds the
+  // mouseenter on the submenu fires within ~10 ms — and short enough
+  // that an intentional "move away" feels immediate.
+  const closeTimeoutRef = useRef<number | null>(null);
+  const cancelClose = () => {
+    if (closeTimeoutRef.current !== null) {
+      window.clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+  };
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimeoutRef.current = window.setTimeout(() => {
+      closeTimeoutRef.current = null;
+      // Only collapse the drill — outside click / Escape still own
+      // fully closing the dropdown. Guarded on `drilledFromTopRef`
+      // so chip-click standalone submenus don't auto-dismiss.
+      if (drilledFromTopRef.current) {
+        onViewChange('top');
+      }
+    }, 80);
+  };
+  // Cleanup on unmount so a pending timer can't fire after teardown.
+  useEffect(() => {
+    return () => cancelClose();
+  }, []);
+
   // Close the dropdown on outside click + Escape.  Listeners only
   // attach while the dropdown is open so we don't burn cycles on
   // every page click when the surface is closed.
+  //
+  // "Inside" means any of:
+  //   • rootRef          (the trigger wrapper)
+  //   • popoverRef       (the portaled popover panel)
+  //   • popoverAnchorEl  (the external chip, when chip-anchored)
+  // Without the popover/anchor checks the portal'd popover would self-
+  // close on every interaction since it lives outside `rootRef`.
   useEffect(() => {
     if (!open) return;
     const onPointer = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        onViewChange(null);
-      }
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      if (popoverAnchorEl?.contains(target)) return;
+      onViewChange(null);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onViewChange(null);
@@ -166,7 +274,7 @@ export function FilterDropdown({
       document.removeEventListener('mousedown', onPointer);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open, onViewChange]);
+  }, [open, onViewChange, popoverAnchorEl]);
 
   // Reset query state + seed the name draft whenever the dropdown
   // opens or the view changes.  Also clears the drill ref on close.
@@ -259,105 +367,145 @@ export function FilterDropdown({
   const showSubmenuRightOfTop =
     (view === 'networks' || view === 'users') && drilledFromTopRef.current;
 
-  return (
+  // The popover JSX — extracted so we can render it via portal when
+  // the dropdown is open. Same DOM regardless of whether anchored to
+  // the internal trigger or to an external chip.
+  const popoverNode = open && popoverPos ? (
     <div
-      ref={rootRef}
-      className="relative inline-flex"
-      style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
+      ref={popoverRef}
+      className="z-30 flex items-start gap-[4px]"
+      style={{
+        position: 'fixed',
+        top: popoverPos.top,
+        left: popoverPos.left,
+        fontFamily: 'IBM Plex Sans, sans-serif',
+      }}
     >
-      <button
-        type="button"
-        onClick={() => {
-          drilledFromTopRef.current = false;
-          onViewChange(open ? null : 'top');
-        }}
-        className="inline-flex items-center"
-      >
-        {renderTrigger?.(open)}
-      </button>
+      {showTopPanel && (
+        <TopPanel
+          query={topQuery}
+          onQueryChange={setTopQuery}
+          showSuggestions={showSuggestions}
+          networkSuggestions={networkSuggestions}
+          userSuggestions={userSuggestions}
+          activeRow={
+            view === 'networks'
+              ? 'network'
+              : view === 'users'
+                ? 'user'
+                : null
+          }
+          inputRef={topInputRef}
+          onPickNetwork={(p) => {
+            commitNetworkToggle(p);
+            onViewChange(null);
+          }}
+          onPickUser={(id) => {
+            commitUserToggle(id);
+            onViewChange(null);
+          }}
+          onPickNameContains={() => {
+            onNameContainsChange(trimmedTop);
+            onViewChange(null);
+          }}
+          onOpenNetworks={() => {
+            cancelClose();
+            drilledFromTopRef.current = true;
+            onViewChange('networks');
+          }}
+          onOpenUsers={() => {
+            cancelClose();
+            drilledFromTopRef.current = true;
+            onViewChange('users');
+          }}
+          onLeaveCategory={scheduleClose}
+          onHoverNonCategory={scheduleClose}
+        />
+      )}
 
-      {open && (
-        <div className="absolute z-30 left-0 top-[calc(100%+4px)] flex items-start gap-[4px]">
-          {showTopPanel && (
-            <TopPanel
-              query={topQuery}
-              onQueryChange={setTopQuery}
-              showSuggestions={showSuggestions}
-              networkSuggestions={networkSuggestions}
-              userSuggestions={userSuggestions}
-              activeRow={
-                view === 'networks'
-                  ? 'network'
-                  : view === 'users'
-                    ? 'user'
-                    : null
-              }
-              inputRef={topInputRef}
-              onPickNetwork={(p) => {
-                commitNetworkToggle(p);
-                onViewChange(null);
-              }}
-              onPickUser={(id) => {
-                commitUserToggle(id);
-                onViewChange(null);
-              }}
-              onPickNameContains={() => {
-                onNameContainsChange(trimmedTop);
-                onViewChange(null);
-              }}
-              onOpenNetworks={() => {
-                drilledFromTopRef.current = true;
-                onViewChange('networks');
-              }}
-              onOpenUsers={() => {
-                drilledFromTopRef.current = true;
-                onViewChange('users');
-              }}
-            />
-          )}
-
-          {/* Sub-selectors:
-              • In drill mode (`showSubmenuRightOfTop`) they sit to the
-                right of the parent, gap-4 between.
-              • Otherwise (chip-click entry) they stand alone in the
-                same anchor slot. */}
-          {view === 'networks' && (
-            <NetworkSelector
-              query={subQuery}
-              onQueryChange={setSubQuery}
-              inputRef={subInputRef}
-              available={availableNetworks}
-              selected={selectedNetworks}
-              onToggle={commitNetworkToggle}
-              onSelectAll={handleSelectAllNetworks}
-              onUnselectAll={handleUnselectAllNetworks}
-            />
-          )}
-
-          {view === 'users' && (
-            <UserSelector
-              query={subQuery}
-              onQueryChange={setSubQuery}
-              inputRef={subInputRef}
-              available={availableUsers}
-              selected={selectedUsers}
-              onToggle={commitUserToggle}
-              onSelectAll={handleSelectAllUsers}
-              onUnselectAll={handleUnselectAllUsers}
-            />
-          )}
-
-          {view === 'name-edit' && !showSubmenuRightOfTop && (
-            <NameContainsEditor
-              draft={nameDraft}
-              onDraftChange={setNameDraft}
-              inputRef={nameInputRef}
-              onCommit={commitNameContains}
-            />
-          )}
+      {/* Sub-selectors:
+          • In drill mode (`showSubmenuRightOfTop`) they sit to the
+            right of the parent, gap-4 between.
+          • Otherwise (chip-click entry) they stand alone in the
+            same anchor slot. */}
+      {view === 'networks' && (
+        <div
+          // Re-entering the submenu cancels a pending close, leaving
+          // it cancels the cancel and schedules one. Together with
+          // the row's enter/leave handlers, this keeps the row
+          // highlight + submenu treated as one atomic hover region.
+          // Only matters when drilled from the top panel — chip-
+          // click flows have `drilledFromTopRef === false` so the
+          // scheduled close is a no-op for them.
+          onMouseEnter={cancelClose}
+          onMouseLeave={scheduleClose}
+        >
+          <NetworkSelector
+            query={subQuery}
+            onQueryChange={setSubQuery}
+            inputRef={subInputRef}
+            available={availableNetworks}
+            selected={selectedNetworks}
+            onToggle={commitNetworkToggle}
+            onSelectAll={handleSelectAllNetworks}
+            onUnselectAll={handleUnselectAllNetworks}
+          />
         </div>
       )}
+
+      {view === 'users' && (
+        <div onMouseEnter={cancelClose} onMouseLeave={scheduleClose}>
+          <UserSelector
+            query={subQuery}
+            onQueryChange={setSubQuery}
+            inputRef={subInputRef}
+            available={availableUsers}
+            selected={selectedUsers}
+            onToggle={commitUserToggle}
+            onSelectAll={handleSelectAllUsers}
+            onUnselectAll={handleUnselectAllUsers}
+          />
+        </div>
+      )}
+
+      {view === 'name-edit' && !showSubmenuRightOfTop && (
+        <NameContainsEditor
+          draft={nameDraft}
+          onDraftChange={setNameDraft}
+          inputRef={nameInputRef}
+          onCommit={commitNameContains}
+        />
+      )}
     </div>
+  ) : null;
+
+  return (
+    <>
+      <div
+        ref={rootRef}
+        className="relative inline-flex"
+        style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
+      >
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() => {
+            drilledFromTopRef.current = false;
+            onViewChange(open ? null : 'top');
+          }}
+          className="inline-flex items-center"
+        >
+          {renderTrigger?.(open)}
+        </button>
+      </div>
+      {/* Portal the popover to document.body so the sticky / overflow
+          ancestors don't clip it, and so its position is anchored
+          purely off `popoverPos` (computed from the trigger button or
+          an external chip via `popoverAnchorEl`). */}
+      {typeof document !== 'undefined' && popoverNode
+        ? createPortal(popoverNode, document.body)
+        : null}
+    </>
   );
 }
 
@@ -401,6 +549,13 @@ interface TopPanelProps {
   onPickNameContains: () => void;
   onOpenNetworks: () => void;
   onOpenUsers: () => void;
+  /** Cursor left a category row — schedule a drill close. */
+  onLeaveCategory: () => void;
+  /** Cursor entered a region of the top panel that is NOT a category
+   *  row (e.g. the search input).  Same effect as leaving a row —
+   *  schedules the drill to collapse, so the active row's highlight
+   *  drops and the submenu folds away. */
+  onHoverNonCategory: () => void;
 }
 
 function TopPanel({
@@ -416,6 +571,8 @@ function TopPanel({
   onPickNameContains,
   onOpenNetworks,
   onOpenUsers,
+  onLeaveCategory,
+  onHoverNonCategory,
 }: TopPanelProps) {
   return (
     <div
@@ -423,8 +580,11 @@ function TopPanel({
       style={{ boxShadow: PANEL_SHADOW }}
     >
       {/* Search input — Figma 696:33983. Pressing Enter with text
-          typed commits a Name contains filter immediately. */}
-      <div className="p-[8px]">
+          typed commits a Name contains filter immediately.
+          Hovering the search area is treated as "leaving the category
+          rows" — it schedules the drill to collapse so the active
+          row's highlight drops in step. */}
+      <div className="p-[8px]" onMouseEnter={onHoverNonCategory}>
         <div className={SEARCH_INPUT_WRAP}>
           <IconSearch size={16} color="#201E24" />
           <input
@@ -457,11 +617,13 @@ function TopPanel({
               label="Network"
               active={activeRow === 'network'}
               onOpen={onOpenNetworks}
+              onLeave={onLeaveCategory}
             />
             <CategoryRow
               label="User"
               active={activeRow === 'user'}
               onOpen={onOpenUsers}
+              onLeave={onLeaveCategory}
             />
           </>
         ) : (
@@ -502,14 +664,21 @@ interface CategoryRowProps {
    *  is also wired so keyboard / touch users can open the same
    *  surface — both call the same handler. */
   onOpen: () => void;
+  /** Cursor left this row — parent schedules a drill close so the
+   *  highlight + submenu drop together when the user moves away. The
+   *  schedule is cancelled if the cursor lands on the submenu, the
+   *  sibling category row, or this row again before the timer fires. */
+  onLeave: () => void;
 }
 
-function CategoryRow({ label, active, onOpen }: CategoryRowProps) {
+function CategoryRow({ label, active, onOpen, onLeave }: CategoryRowProps) {
   return (
     <button
       type="button"
       onMouseEnter={onOpen}
+      onMouseLeave={onLeave}
       onFocus={onOpen}
+      onBlur={onLeave}
       onClick={onOpen}
       className={cn(
         'flex items-center justify-between w-full px-[8px] py-[10px] rounded-[4px]',

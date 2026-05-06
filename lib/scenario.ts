@@ -77,13 +77,20 @@ function readPersisted(): Scenario {
       parsed.templateScope === 'full' || parsed.templateScope === 'beta'
         ? parsed.templateScope
         : DEFAULT_SCENARIO.templateScope;
+    // 'filtered' was retired from the Scenario Switcher UI — coerce
+     // any persisted 'filtered' selection up to 'many' so users who
+     // previously had it selected don't end up with an unrepresented
+     // radio group on the next load.  The 'filtered' branch in
+     // scenario-data still exists for now in case we re-introduce the
+     // option; this is purely a UI migration.
     const reportListState: ReportListState =
       parsed.reportListState === 'empty' ||
       parsed.reportListState === 'few' ||
-      parsed.reportListState === 'many' ||
-      parsed.reportListState === 'filtered'
+      parsed.reportListState === 'many'
         ? parsed.reportListState
-        : DEFAULT_SCENARIO.reportListState;
+        : parsed.reportListState === 'filtered'
+          ? 'many'
+          : DEFAULT_SCENARIO.reportListState;
     // Feature flags — coerce to boolean so any garbage value (string,
     // null, undefined, missing field on older payloads) collapses to
     // the default-OFF state instead of leaking truthy junk into the UI.
