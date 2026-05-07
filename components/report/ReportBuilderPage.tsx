@@ -22,17 +22,43 @@ const CHART_H_FACTOR = 13;
 /** Minimum chart height = 1 Figma cell, in NEW grid-row units. */
 const CHART_MIN_H = 78;
 import { cn, uid } from '@/lib/utils';
-import { IconPlus, IconModules, IconSettings } from '@/components/icons/FigmaIcons';
+import {
+  IconPlus,
+  IconModules,
+  IconSettings,
+  IconStackPlus,
+  IconElements,
+} from '@/components/icons/FigmaIcons';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import type { SidebarMode } from '@/lib/scenario';
+
+/**
+ * Which panel surface is currently visible in the report builder.
+ *   • 'modules'  — the Network / Visual-type / (combined-only) Elements
+ *                  flow.  Always reachable; in split mode this is what
+ *                  the StackPlus icon opens.
+ *   • 'elements' — the Elements list only (no tabs / filters).  Only
+ *                  surfaces in split mode; the Elements rail icon
+ *                  opens it as its own panel.  In combined mode this
+ *                  value collapses to 'modules' (with the Elements
+ *                  tab pre-selected inside) because there's no
+ *                  standalone elements panel.
+ */
+type PanelKind = 'modules' | 'elements';
 
 function LeftSidebar({
   isEditMode,
-  isPanelOpen,
+  activePanel,
   onTogglePanel,
+  sidebarMode,
 }: {
   isEditMode: boolean;
-  isPanelOpen: boolean;
-  onTogglePanel: () => void;
+  activePanel: PanelKind | null;
+  /** Toggle a specific panel.  Clicking the rail icon for the
+   *  currently-active panel closes it; clicking a different icon
+   *  switches to that panel. */
+  onTogglePanel: (kind: PanelKind) => void;
+  sidebarMode: SidebarMode;
 }) {
   if (!isEditMode) return null;
 
@@ -42,6 +68,80 @@ function LeftSidebar({
   // ReportBuilderPage now carries `gap-2 px-6 py-2`, so the sidebar only
   // needs `self-start` (don't stretch vertically) and no per-element
   // margin.
+
+  // Split mode (Figma 1844:78434) — two stacked nav cells above a
+  // hairline divider, with the Settings cog as a secondary action
+  // below.  The two nav cells are 40×40 squares (rounded-[4px]) with
+  // an active fill of `#EDEAFF` and brand-purple icon stroke; the
+  // bottom Settings is a 40×40 round button (rounded-full).
+  if (sidebarMode === 'split') {
+    const isModulesActive = activePanel === 'modules';
+    const isElementsActive = activePanel === 'elements';
+    return (
+      <div className="flex-shrink-0 flex flex-col items-center p-[4px] bg-white border border-[#E8E8E9] rounded-[8px] self-start">
+        <div className="flex flex-col gap-[8px] items-start w-[40px]">
+          {/* Data modules — StackPlus glyph, brand-purple stroke. */}
+          <Tooltip>
+            <TooltipTrigger
+              onClick={() => onTogglePanel('modules')}
+              aria-label="Data modules"
+              aria-pressed={isModulesActive}
+              className={cn(
+                'w-10 h-10 flex items-center justify-center rounded-[4px] transition-colors',
+                isModulesActive ? 'bg-[#EDEAFF]' : 'bg-transparent hover:bg-[#F3F3F4]',
+              )}
+            >
+              <IconStackPlus
+                size={20}
+                color={isModulesActive ? '#4D36FF' : '#4C4B4F'}
+              />
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>Data modules</TooltipContent>
+          </Tooltip>
+
+          {/* Elements — filled-path glyph (NOT stroked). */}
+          <Tooltip>
+            <TooltipTrigger
+              onClick={() => onTogglePanel('elements')}
+              aria-label="Elements"
+              aria-pressed={isElementsActive}
+              className={cn(
+                'w-10 h-10 flex items-center justify-center rounded-[4px] transition-colors',
+                isElementsActive ? 'bg-[#EDEAFF]' : 'bg-transparent hover:bg-[#F3F3F4]',
+              )}
+            >
+              <IconElements
+                size={20}
+                color={isElementsActive ? '#4D36FF' : '#201E24'}
+              />
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>Elements</TooltipContent>
+          </Tooltip>
+
+          {/* Hairline divider — Figma `Line 13`, full rail width. */}
+          <div className="h-px w-full bg-[#E8E8E9]" aria-hidden="true" />
+
+          {/* Settings — round 40×40 (rounded-[90px] per Figma) so it
+              reads as a secondary tertiary action distinct from the
+              squared nav cells above. */}
+          <Tooltip>
+            <TooltipTrigger
+              aria-label="Report settings"
+              className="w-10 h-10 flex items-center justify-center rounded-[90px] bg-transparent text-[#4C4B4F] hover:bg-[#F3F3F4] transition-colors"
+            >
+              <IconSettings size={20} color="#4C4B4F" />
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>Report settings</TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
+    );
+  }
+
+  // Combined mode — existing 3-icon rail (Plus + Modules + Settings).
+  // Plus is the panel toggle; Modules is decorative for now (the panel
+  // hosts the modules list); Settings is a stub.
+  const isPanelOpen = activePanel !== null;
   return (
     <div className="flex-shrink-0 flex flex-col items-center gap-4 p-[6px] bg-white border border-[#E8E8E9] rounded-[8px] self-start">
       {/* Sidebar buttons — Figma icon-library convention: 40×40 button with a
@@ -59,7 +159,7 @@ function LeftSidebar({
           icon. Hover on inactive uses DARK/dark--tint_90 (#F3F3F4). */}
       <Tooltip>
         <TooltipTrigger
-          onClick={onTogglePanel}
+          onClick={() => onTogglePanel('modules')}
           aria-label="Add modules"
           className={cn(
             'w-10 h-10 flex items-center justify-center rounded-[4px] transition-colors',
@@ -113,6 +213,12 @@ interface ReportBuilderPageProps {
    *  button while editing. Receives the latest snapshot so the parent
    *  can persist it back into the reports list. Optional. */
   onSave?: (snapshot: { title: string; modules: ReportModule[]; selectedProfileIds: string[] }) => void;
+  /** Sidebar architecture — flips between the existing combined rail
+   *  (single panel with Network/Visual/Elements as tabs) and the new
+   *  split rail (Data modules + Elements as separate panels).  Driven
+   *  by the Scenario Switcher; defaults to 'combined' so first-visit
+   *  / non-scenario users see the production layout. */
+  sidebarMode?: SidebarMode;
 }
 
 export function ReportBuilderPage({
@@ -121,6 +227,7 @@ export function ReportBuilderPage({
   initialProfileIds,
   onBack,
   onSave: onSaveProp,
+  sidebarMode = 'combined',
 }: ReportBuilderPageProps = {}) {
   const startingModules = initialModules ?? DEFAULT_MODULES;
   const [modules, setModules] = useState<ReportModule[]>(startingModules);
@@ -133,7 +240,15 @@ export function ReportBuilderPage({
   const [isEditMode, setIsEditMode] = useState(
     (initialModules?.length ?? -1) === 0,
   );
-  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  // Which panel surface is open right now (or `null` for closed).  In
+  // combined mode this only ever takes 'modules' because Elements
+  // lives inside that panel as a tab; in split mode it can be
+  // 'modules' OR 'elements' depending on which rail icon was clicked.
+  const [activePanel, setActivePanel] = useState<PanelKind | null>(null);
+  // Backwards-compat boolean — most existing call sites only care
+  // whether ANY panel is open (e.g. canvas resize gating, empty-state
+  // visibility), not which one.  Derive once and reuse.
+  const isPanelOpen = activePanel !== null;
   const [title, setTitle] = useState(initialTitle ?? 'TikTok Monthly Report');
   const [containerWidth, setContainerWidth] = useState(900);
   // Viewport width — drives the panel width breakpoint. Tracked via a
@@ -208,7 +323,7 @@ export function ReportBuilderPage({
   const handleSave = useCallback(() => {
     setSavedModules(modules);
     setIsEditMode(false);
-    setIsPanelOpen(false);
+    setActivePanel(null);
     onSaveProp?.({
       title,
       modules,
@@ -219,7 +334,7 @@ export function ReportBuilderPage({
   const handleCancel = useCallback(() => {
     setModules(savedModules);
     setIsEditMode(false);
-    setIsPanelOpen(false);
+    setActivePanel(null);
   }, [savedModules]);
 
   const handleAddModule = useCallback((definition: ModuleDefinition) => {
@@ -422,21 +537,30 @@ export function ReportBuilderPage({
   // comment on `suspendCanvasResizeRef`. Cleared in the wrapper's
   // onTransitionEnd handler below, where we also commit one final
   // width measurement so the canvas grid catches up to the new size.
-  // Wraps EVERY caller that flips `isPanelOpen` (sidebar toggle, the
-  // panel's own close X, edit-mode exit) so the canvas stays frozen
-  // during every slide direction, not just sidebar-driven opens.
-  const setPanelOpenAnimated = useCallback((next: boolean) => {
-    setIsPanelOpen((prev) => {
+  // Wraps EVERY caller that flips the panel state (sidebar toggle,
+  // the panel's own close X, edit-mode exit) so the canvas stays
+  // frozen during every slide direction, not just sidebar-driven
+  // opens.  Accepts a `PanelKind | null` rather than a boolean so
+  // split-mode callers can target a specific surface; combined-mode
+  // callers pass `'modules'` for open and `null` for close.
+  const setActivePanelAnimated = useCallback((next: PanelKind | null) => {
+    setActivePanel((prev) => {
       if (prev === next) return prev;
       suspendCanvasResizeRef.current = true;
       return next;
     });
   }, []);
 
-  const handleTogglePanel = useCallback(() => {
-    setIsPanelOpen((prev) => {
+  // Toggle the requested panel.  Clicking the rail icon for the
+  // currently-active surface closes it; clicking a different icon
+  // (split mode only) switches to that surface without an
+  // intermediate close.  Combined mode only ever passes 'modules', so
+  // it degenerates to the previous boolean toggle behaviour.
+  const handleTogglePanel = useCallback((kind: PanelKind = 'modules') => {
+    setActivePanel((prev) => {
       suspendCanvasResizeRef.current = true;
-      return !prev;
+      if (prev === kind) return null;
+      return kind;
     });
   }, []);
 
@@ -479,8 +603,9 @@ export function ReportBuilderPage({
             height). */}
         <LeftSidebar
           isEditMode={isEditMode}
-          isPanelOpen={isPanelOpen}
+          activePanel={activePanel}
           onTogglePanel={handleTogglePanel}
+          sidebarMode={sidebarMode}
         />
 
         {/* Add modules panel — floating card, rounded on all four corners
@@ -526,9 +651,24 @@ export function ReportBuilderPage({
           {isEditMode && (
             <div className="h-full" style={{ width: panelWidth }}>
               <AddModulePanel
+                // panelMode drives the panel's chrome:
+                //   • 'all'      — combined sidebar; full tabs + filters.
+                //   • 'modules'  — split / Data modules; Network +
+                //                  Visual-type tabs only (no Elements
+                //                  tab — Elements has its own panel
+                //                  in this mode).
+                //   • 'elements' — split / Elements; no tabs / filter
+                //                  rows, header relabeled to "Elements".
+                panelMode={
+                  sidebarMode === 'combined'
+                    ? 'all'
+                    : activePanel === 'elements'
+                      ? 'elements'
+                      : 'modules'
+                }
                 onAdd={handleAddModule}
                 onAddElement={handleAddElement}
-                onClose={() => setPanelOpenAnimated(false)}
+                onClose={() => setActivePanelAnimated(null)}
                 onDragStartModule={handleDragStartModule}
                 onDragEndModule={handleDragEndModule}
                 onDragStartElement={handleDragStartElement}

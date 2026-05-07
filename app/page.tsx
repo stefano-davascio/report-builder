@@ -274,6 +274,7 @@ export default function Home() {
         initialTitle={active.name}
         initialModules={active.modules}
         initialProfileIds={active.selectedProfileIds}
+        sidebarMode={scenario.sidebarMode}
         onBack={handleBack}
         onSave={(snapshot) => handleBuilderSave(active.id, snapshot)}
       />
@@ -290,6 +291,7 @@ export default function Home() {
         initialTitle={draft.name}
         initialModules={draft.modules}
         initialProfileIds={draft.selectedProfileIds}
+        sidebarMode={scenario.sidebarMode}
         onBack={handleBack}
         onSave={(snapshot) => handleSaveDraft(draft, snapshot)}
       />

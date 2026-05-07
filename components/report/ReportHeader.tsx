@@ -110,23 +110,49 @@ export function ReportHeader({
           </button>
         )}
 
-        {/* ReportTitleInput — same component in both modes (Figma 288:2825).
-            px-16 py-8, rounded-4. Gap between title and pencil is 8 px
-            (NOT the 16 px shown on the design's container token) — the
-            tighter spacing in the actual Figma render reads visibly
-            below the canonical `--spacings/16`, so we follow the render
-            over the token. */}
+        {/* ReportTitleInput — Figma 489:11557 covers all four states:
+              • Default  (489:11559) — no bg / no border, px-16 py-8.
+              • Hover    (489:11560) — bg-[#F3F3F4] added.
+              • Clicked  (489:11561) — bg-[#F3F3F4] + 1-px brand-purple
+                                       border, py bumps to 9 to absorb
+                                       the border thickness; pencil
+                                       hidden; selected text on
+                                       #C9C2FF wash.
+              • Typing   (489:11562) — same chrome as Clicked; caret in
+                                       #4D36FF, pencil still hidden.
+            Switching `editingTitle` flips between the {Default+Hover}
+            cluster and the {Clicked+Typing} cluster — the per-cluster
+            differences (hover wash, caret showing) are pure browser
+            behaviour. */}
         <div
           className={cn(
-            'flex items-center gap-2 px-4 py-2 rounded-[4px] transition-colors cursor-pointer group',
-            // Hover wash adapts to the surface color — neutral gray on
-            // white, white-on-purple on the edit-mode tint so the chip
-            // stays legible against the #EDEAFF background.
-            isEditMode ? 'hover:bg-white' : 'hover:bg-[#F3F3F4]',
+            'flex items-center gap-2 px-4 rounded-[4px] transition-colors max-w-[288px]',
+            editingTitle
+              // Clicked / Typing.  py-[9px] (vs default's py-2/8) so
+              // the outer height grows by ~4 px when active — the
+              // design intentionally enlarges the click target to
+              // signal mutability; box-sizing keeps the border inside
+              // the padding box so the text doesn't visibly shift.
+              ? 'py-[9px] bg-[#F3F3F4] border border-[#4D36FF]'
+              : cn(
+                  // Default + Hover.  Hover wash adapts to the
+                  // surface color — neutral grey on white,
+                  // white-on-purple against the edit-mode tint.
+                  'py-2 cursor-pointer group',
+                  isEditMode ? 'hover:bg-white' : 'hover:bg-[#F3F3F4]',
+                ),
           )}
           onClick={() => { if (!editingTitle) { setTitleDraft(title); setEditingTitle(true); } }}
         >
           {editingTitle ? (
+            // Caret + selection mirror Figma 489:11561 / 489:11562:
+            //   • caret: BRAND/primary `#4D36FF` (Typing state).
+            //   • selection: PRIMARY/primary--tint_70 `#C9C2FF`
+            //     wash + dark text (Clicked state).
+            // The pencil button is intentionally NOT rendered in the
+            // editing branch — Figma drops it from the Clicked /
+            // Typing variants so the active title reads as a clean
+            // text field rather than a chip with an extra glyph.
             <input
               ref={inputRef}
               type="text"
@@ -138,39 +164,51 @@ export function ReportHeader({
                 if (e.key === 'Escape') { setTitleDraft(title); setEditingTitle(false); }
               }}
               onClick={(e) => e.stopPropagation()}
-              className="text-[16px] font-medium text-[#201E24] border-none outline-none bg-transparent min-w-[120px] max-w-[288px] leading-[22px]"
+              // `field-sizing: content` makes the input shrink-to-fit
+              // the typed value (Figma 489:11562 Typing state shows
+              // the chip narrowing to `w-[16px]` for just "E|") while
+              // still respecting `max-w-[288px]` for runaway titles.
+              // `size={1}` is the HTML fallback minimum so the input
+              // doesn't collapse to zero when empty in browsers
+              // without `field-sizing` support (Safari < 17.4).
+              size={1}
+              className={cn(
+                'text-[16px] font-medium text-[#201E24] border-none outline-none bg-transparent',
+                'text-left max-w-[288px] leading-[22px]',
+                '[field-sizing:content]',
+                'caret-[#4D36FF] selection:bg-[#C9C2FF] selection:text-[#201E24]',
+              )}
             />
           ) : (
-            // Title color is BRAND/dark `#201E24` for entered values
-            // (the Figma file shows `#4C4B4F` because the master
-            // component renders the "Untitled report" placeholder
-            // state — see `ReportTitleInput.property1=default`. For an
-            // actual title the heading color tier applies).
-            <span className="text-[16px] font-medium text-[#201E24] leading-[22px] max-w-[288px] truncate">
-              {title}
-            </span>
+            <>
+              {/* Title color is BRAND/dark `#201E24` for entered
+                  values (the Figma file shows `#4C4B4F` because the
+                  master component renders the "Untitled report"
+                  placeholder state — see
+                  `ReportTitleInput.property1=default`. For an actual
+                  title the heading color tier applies). */}
+              <span className="text-[16px] font-medium text-[#201E24] leading-[22px] max-w-[288px] truncate">
+                {title}
+              </span>
+              {/* Pencil rename affordance — Figma 283:2740 wrapper,
+                  14-px `rename` glyph (IconPencil). Stroke override
+                  `[&_path]:[stroke-width:1.33]` — Figma renders this
+                  glyph at ~1.33 px stroke at 14-tile.  The lib
+                  default of 1.5 would also be acceptable here but a
+                  touch heavier than spec. */}
+              <button
+                onClick={(e) => { e.stopPropagation(); setTitleDraft(title); setEditingTitle(true); }}
+                className="w-6 h-6 flex items-center justify-center flex-shrink-0 cursor-pointer"
+                aria-label="Rename report"
+              >
+                <IconPencil
+                  size={14}
+                  color="#201E24"
+                  className="[&_path]:[stroke-width:1.33]"
+                />
+              </button>
+            </>
           )}
-          {/* Pencil rename affordance — Figma 283:2740 wrapper, 14-px
-              `rename` glyph (IconPencil). Stroke override
-              `[&_path]:[stroke-width:1.33]` — Figma renders this
-              glyph at ~1.33 px stroke at 14-tile.  Since the icon
-              library now uses `vector-effect: non-scaling-stroke`,
-              the value is interpreted in CSS pixels directly (no
-              viewBox scaling), so we set 1.33 literally instead of
-              the previous 2.25 viewBox-units that pre-compensated
-              for a 14/24 scale-down.  The lib default of 1.5 would
-              also be acceptable here but a touch heavier than spec. */}
-          <button
-            onClick={(e) => { e.stopPropagation(); setTitleDraft(title); setEditingTitle(true); }}
-            className="w-6 h-6 flex items-center justify-center flex-shrink-0 cursor-pointer"
-            aria-label="Rename report"
-          >
-            <IconPencil
-              size={14}
-              color="#201E24"
-              className="[&_path]:[stroke-width:1.33]"
-            />
-          </button>
         </div>
       </div>
 

@@ -27,6 +27,7 @@ import type {
   ReportListState,
   Scenario,
   ScenarioFeatures,
+  SidebarMode,
   TemplateScope,
 } from '@/lib/scenario';
 import { cn } from '@/lib/utils';
@@ -59,6 +60,14 @@ const FEATURE_TOGGLES: { id: keyof ScenarioFeatures; label: string; hint: string
   { id: 'sorting', label: 'Sorting', hint: 'sort indicator icons + clickable column headers' },
 ];
 
+// Sidebar architecture — two iterations of the report-builder left rail
+// live side by side; flipping this radio swaps the layout in place
+// without remounting the canvas / modules / filters.
+const SIDEBAR_MODES: { id: SidebarMode; label: string; hint: string }[] = [
+  { id: 'combined', label: 'Combined', hint: 'single rail; modules + elements share one panel with tabs' },
+  { id: 'split',    label: 'Split',    hint: 'two rail entries; Data modules + Elements open separate panels' },
+];
+
 export function ScenarioSwitcher({ scenario, onChange }: ScenarioSwitcherProps) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -89,6 +98,11 @@ export function ScenarioSwitcher({ scenario, onChange }: ScenarioSwitcherProps) 
     });
   };
 
+  const handleSidebarMode = (next: SidebarMode) => {
+    if (next === scenario.sidebarMode) return;
+    onChange({ ...scenario, sidebarMode: next });
+  };
+
   return createPortal(
     <div
       // Full-viewport overlay — neither participates in page layout
@@ -107,6 +121,7 @@ export function ScenarioSwitcher({ scenario, onChange }: ScenarioSwitcherProps) 
           onTemplateScope={handleTemplateScope}
           onReportListState={handleReportListState}
           onFeatureToggle={handleFeatureToggle}
+          onSidebarMode={handleSidebarMode}
           onCollapse={() => setOpen(false)}
         />
       ) : (
@@ -159,6 +174,7 @@ interface ExpandedPanelProps {
   onTemplateScope: (next: TemplateScope) => void;
   onReportListState: (next: ReportListState) => void;
   onFeatureToggle: (key: keyof ScenarioFeatures) => void;
+  onSidebarMode: (next: SidebarMode) => void;
   onCollapse: () => void;
 }
 
@@ -167,6 +183,7 @@ function ExpandedPanel({
   onTemplateScope,
   onReportListState,
   onFeatureToggle,
+  onSidebarMode,
   onCollapse,
 }: ExpandedPanelProps) {
   // Drag state lives entirely inside this component — when the panel
@@ -366,6 +383,23 @@ function ExpandedPanel({
             label={opt.label}
             hint={opt.hint}
             onChange={() => onFeatureToggle(opt.id)}
+          />
+        ))}
+      </Section>
+
+      {/* Sidebar — radios since the two architectures are mutually
+          exclusive. Switching only restructures the report-builder
+          rail / panel composition; the canvas, module instances, and
+          filter state are preserved across switches. */}
+      <Section title="Sidebar">
+        {SIDEBAR_MODES.map((opt) => (
+          <RadioRow
+            key={opt.id}
+            checked={scenario.sidebarMode === opt.id}
+            label={opt.label}
+            hint={opt.hint}
+            onChange={() => onSidebarMode(opt.id)}
+            name="sidebar-mode"
           />
         ))}
       </Section>

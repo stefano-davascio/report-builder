@@ -128,10 +128,15 @@ function NormalActions({
                 onMouseDown={(e) => e.stopPropagation()}
                 title={CHART_TYPE_LABELS[type]}
                 className={cn(
+                  // 28×28 segments wrapping a 16-px icon (p-[6px]
+                  // gives a 6-px halo around the glyph). Stroke 1.25
+                  // + #363439 fill match the native Figma asset (the
+                  // library default 1.5 reads too heavy at this size).
                   'flex items-center justify-center w-7 h-7 p-[6px] transition-colors',
+                  '[&_path]:[stroke-width:1.25]',
                   active
                     ? 'bg-[#EDEAFF] text-[#4D36FF]'
-                    : 'bg-white text-[#4C4B4F] hover:bg-[#F3F3F4]',
+                    : 'bg-white text-[#363439] hover:bg-[#F3F3F4]',
                 )}
               >
                 {chartIcon(type, 16)}
@@ -146,7 +151,11 @@ function NormalActions({
           onClick={onDuplicate}
           onMouseDown={(e) => e.stopPropagation()}
           title="Duplicate module"
-          className="flex items-center justify-center w-7 h-7 p-[6px] bg-white text-[#4C4B4F] hover:bg-[#F3F3F4] transition-colors"
+          className={cn(
+            'flex items-center justify-center w-7 h-7 p-[6px]',
+            'bg-white text-[#363439] hover:bg-[#F3F3F4] transition-colors',
+            '[&_path]:[stroke-width:1.25]',
+          )}
         >
           <IconCopy size={16} />
         </button>
@@ -156,7 +165,11 @@ function NormalActions({
           onClick={onDelete}
           onMouseDown={(e) => e.stopPropagation()}
           title="Delete module"
-          className="flex items-center justify-center w-7 h-7 p-[6px] bg-white text-[#4C4B4F] hover:bg-[#F3F3F4] transition-colors"
+          className={cn(
+            'flex items-center justify-center w-7 h-7 p-[6px]',
+            'bg-white text-[#363439] hover:bg-[#F3F3F4] transition-colors',
+            '[&_path]:[stroke-width:1.25]',
+          )}
         >
           <IconTrash size={16} />
         </button>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { ModuleDefinition, Platform, ChartType } from '@/types';
 import { MODULE_DEFINITIONS } from '@/lib/mock-data';
 import {
@@ -78,6 +78,24 @@ interface AddModulePanelProps {
    * stay unchanged.
    */
   compact?: boolean;
+  /**
+   * Which slice of the panel surface to render — drives chrome and
+   * default view, NOT the underlying behaviour (search, drag-and-drop,
+   * filtering all keep working in every mode).
+   *
+   *   • 'all'      — combined sidebar (existing production layout).
+   *                  Network / Visual type / Elements tabs all visible;
+   *                  user picks which view.  Default.
+   *   • 'modules'  — split sidebar / Data modules panel.  No Elements
+   *                  tab.  View toggles between Network and Visual
+   *                  type only.
+   *   • 'elements' — split sidebar / Elements panel.  No tabs, no
+   *                  Network/Visual filter row; the panel renders the
+   *                  Elements list directly under the search input,
+   *                  and the header reads "Elements" instead of
+   *                  "Add modules".
+   */
+  panelMode?: 'all' | 'modules' | 'elements';
 }
 
 type PanelView = 'network' | 'visual' | 'elements';
@@ -470,8 +488,34 @@ export function AddModulePanel({
   onDragStartElement,
   onDragEndElement,
   compact = false,
+  panelMode = 'all',
 }: AddModulePanelProps) {
-  const [view, setView] = useState<PanelView>('network');
+  // Internal `view` state is the user-driven tab selection (only
+  // honoured in panelMode='all' / 'modules'; ignored in 'elements'
+  // since that mode pins the view to elements unconditionally).
+  const [view, setView] = useState<PanelView>(
+    panelMode === 'elements' ? 'elements' : 'network',
+  );
+
+  // Derived effective view — collapses panelMode + internal view into
+  // a single value the renderers below switch on.  In 'elements' mode
+  // the user can't change the view, so we always return 'elements'.
+  // In 'modules' mode we never render the Elements list, so an
+  // 'elements' internal state coerces back to 'network'.
+  const effectiveView: PanelView =
+    panelMode === 'elements'
+      ? 'elements'
+      : panelMode === 'modules' && view === 'elements'
+        ? 'network'
+        : view;
+
+  // When panelMode flips at runtime (Scenario Switcher swap), keep
+  // the internal view in sync so re-opening the panel later doesn't
+  // resurrect a stale tab selection.
+  useEffect(() => {
+    if (panelMode === 'elements' && view !== 'elements') setView('elements');
+    else if (panelMode === 'modules' && view === 'elements') setView('network');
+  }, [panelMode, view]);
   const [search, setSearch] = useState('');
   const [selectedNetwork, setSelectedNetwork] = useState<NetworkFilterId>('all');
   // Visual-type row is always in a single-selected state (Figma 1024:33991
@@ -508,7 +552,7 @@ export function AddModulePanel({
       mods = mods.filter(m => m.name.toLowerCase().includes(q) || m.description.toLowerCase().includes(q));
     }
 
-    if (view === 'network') {
+    if (effectiveView === 'network') {
       if (selectedNetwork === 'all') {
         // "All" tile scopes to Cross-network modules (multi-platform data
         // concepts). Platform-specific modules only surface when the user
@@ -529,12 +573,12 @@ export function AddModulePanel({
       }
     }
 
-    if (view === 'visual' && selectedVisualType) {
+    if (effectiveView === 'visual' && selectedVisualType) {
       mods = mods.filter(m => m.supportedChartTypes.includes(selectedVisualType));
     }
 
     return mods;
-  }, [search, view, selectedNetwork, selectedVisualType]);
+  }, [search, effectiveView, selectedNetwork, selectedVisualType]);
 
   // Section header label for the list below the filters.
   //   • Network / All            → "Cross-network" (all shown modules share
@@ -556,13 +600,13 @@ export function AddModulePanel({
     }
 
     let headerLabel = 'Cross-network';
-    if (view === 'network') {
+    if (effectiveView === 'network') {
       if (selectedNetwork === 'all') headerLabel = 'Cross-network';
       else {
         const opt = NETWORK_OPTIONS.find(o => o.id === selectedNetwork);
         headerLabel = opt?.label ?? 'Cross-network';
       }
-    } else if (view === 'visual') {
+    } else if (effectiveView === 'visual') {
       // selectedVisualType is never null (first chip is pre-selected and
       // clicks single-select), so the lookup always resolves to a label.
       headerLabel = VISUAL_TYPES.find(v => v.type === selectedVisualType)?.label ?? 'Modules';
@@ -570,7 +614,7 @@ export function AddModulePanel({
 
     groups[headerLabel] = filteredModules;
     return groups;
-  }, [filteredModules, view, search, selectedNetwork, selectedVisualType]);
+  }, [filteredModules, effectiveView, search, selectedNetwork, selectedVisualType]);
 
   return (
     <div className="flex flex-col h-full bg-white">
@@ -579,7 +623,16 @@ export function AddModulePanel({
           (#363439). Close button is a 32×32 wrapper with 16×16 close_sm at
           BRAND/dark. */}
       <div className="flex items-center justify-between h-[52px] px-[12px] py-[10px] border-b border-[#E8E8E9] flex-shrink-0">
-        <h2 className="text-[14px] font-medium leading-[21px] text-[#363439]">Add modules</h2>
+        {/* Header label — drives off `panelMode`:
+              • 'all' / 'modules' — "Add modules" (the existing combined
+                title; the split-Data-modules panel reuses it since the
+                content is identical aside from the missing Elements tab).
+              • 'elements'        — "Elements" (split sidebar; the panel
+                only carries layout primitives, so the heading reflects
+                that exactly). */}
+        <h2 className="text-[14px] font-medium leading-[21px] text-[#363439]">
+          {panelMode === 'elements' ? 'Elements' : 'Add modules'}
+        </h2>
         <button
           onClick={onClose}
           className="w-8 h-8 flex items-center justify-center rounded-[4px] hover:bg-[#F3F3F4] transition-colors"
@@ -619,36 +672,47 @@ export function AddModulePanel({
         </div>
       </div>
 
-      {/* Tabs — Figma Frame 1026-38534: pill buttons, selected bg rgba(32,30,36,0.05). */}
-      <div className="px-[12px] pt-[4px] pb-[8px] flex-shrink-0">
-        <div className="flex items-center gap-[8px]">
-          {([
-            { id: 'network', label: 'Network' },
-            { id: 'visual', label: 'Visual type' },
-            { id: 'elements', label: 'Elements' },
-          ] as { id: PanelView; label: string }[]).map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setView(tab.id)}
-              className={cn(
-                'flex-1 min-w-[32px] h-[32px] px-[19px] rounded-full text-[12px] leading-[18px] font-medium transition-colors whitespace-nowrap',
-                view === tab.id
-                  ? 'bg-[rgba(32,30,36,0.05)] text-[#201E24]'
-                  : 'bg-transparent text-[#79787B] hover:text-[#363439]',
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
+      {/* Tabs — Figma Frame 1026-38534: pill buttons, selected bg
+          rgba(32,30,36,0.05).  Hidden entirely in 'elements' panelMode
+          (split sidebar's Elements panel); reduced to Network +
+          Visual type only in 'modules' mode. */}
+      {panelMode !== 'elements' && (
+        <div className="px-[12px] pt-[4px] pb-[8px] flex-shrink-0">
+          <div className="flex items-center gap-[8px]">
+            {(panelMode === 'modules'
+              ? ([
+                  { id: 'network', label: 'Network' },
+                  { id: 'visual', label: 'Visual type' },
+                ] as { id: PanelView; label: string }[])
+              : ([
+                  { id: 'network', label: 'Network' },
+                  { id: 'visual', label: 'Visual type' },
+                  { id: 'elements', label: 'Elements' },
+                ] as { id: PanelView; label: string }[])
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setView(tab.id)}
+                className={cn(
+                  'flex-1 min-w-[32px] h-[32px] px-[19px] rounded-full text-[12px] leading-[18px] font-medium transition-colors whitespace-nowrap',
+                  effectiveView === tab.id
+                    ? 'bg-[rgba(32,30,36,0.05)] text-[#201E24]'
+                    : 'bg-transparent text-[#79787B] hover:text-[#363439]',
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Network filter icons — Figma 1139:172946. Flex wrap, gap-[8px] both
           axes, w-[351px]. Each tile wraps a 24×24 icon with px-[8px] py-[6px]
           (→ 40×36). The "All" tile uses rounded-[4px]; brand icons use
           rounded-[10px] so the tile matches the circular logo. Unselected bg
           is white; selected bg is PRIMARY/primary--tint_90 (#EDEAFF). */}
-      {view === 'network' && !search && (
+      {effectiveView === 'network' && !search && (
         <div className="px-[12px] pb-[12px] flex-shrink-0">
           <div className="flex flex-wrap content-center items-center gap-[8px]">
             {NETWORK_OPTIONS.map((net) => {
@@ -684,7 +748,7 @@ export function AddModulePanel({
           both states (only the tile bg changes), matching the Network tile
           treatment. `title` carries the accessible label since the chip is
           icon-only. */}
-      {view === 'visual' && !search && (
+      {effectiveView === 'visual' && !search && (
         <div className="px-[12px] pb-[12px] flex-shrink-0">
           <div className="flex flex-wrap content-center items-center gap-[8px]">
             {VISUAL_TYPES.map((vt) => {
@@ -727,7 +791,7 @@ export function AddModulePanel({
           DARK/dark--tint_40 #79787B, left-[11px] from panel edge). */}
       <ScrollArea className="flex-1 min-h-0">
         <div className="px-[12px] pt-[12px] pb-[12px] flex flex-col">
-          {view === 'elements' ? (
+          {effectiveView === 'elements' ? (
             <>
               {(Object.entries(groupedElements) as [ElementCategory, ElementDefinition[]][])
                 .filter(([, els]) => els.length > 0)
@@ -765,7 +829,7 @@ export function AddModulePanel({
                   also keep the full cluster since they fan out across tracks. */}
               {(() => {
                 const scopedPlatform: Platform | null =
-                  view === 'network' && !search
+                  effectiveView === 'network' && !search
                     ? filterIdToPlatform(selectedNetwork)
                     : null;
                 return Object.entries(groupedByCategory).map(([category, mods]) => (

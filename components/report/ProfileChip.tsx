@@ -29,7 +29,7 @@
 
 import { MockProfile, ProfileStatus } from '@/lib/profile-data';
 import { IconClose } from '@/components/icons/SendiIcons';
-import { ProfileAvatar } from './ProfileAvatar';
+import { ProfileAvatarSquare } from './ProfileAvatarSquare';
 
 // Status-icon assets from the Figma MCP export. Kept module-local because
 // these specific asset IDs are unique to the chip node — the general
@@ -102,19 +102,17 @@ export function ProfileChip({ profile, isEditing, onRemove }: ProfileChipProps) 
         borderColor: styles?.border ?? HEALTHY_BORDER,
       }}
     >
-      {/* Avatar + name — 8 px between them per Figma `gap-[8px]`.
-          The avatar SVG is 31 px wide because it bakes in the network
-          badge's horizontal overflow (badge center x≈22.9, r≈6.6 ⇒ body
-          ends at 24 px but badge extends to ~29.5 px). Figma measures
-          `gap-8` from the 24 px *body* edge (the badge is allowed to
-          overflow the layout box), so without compensation our text
-          sits ~7 px too far right. `-mr-[7px]` pulls the badge
-          overflow out of layout flow; flex's `items-center` + the SVG's
-          own `flex-shrink-0` keep the visible glyph intact. */}
+      {/* Avatar + name — 8 px gap per Figma 489:12784.  The new
+          24×24 square avatar (ProfileAvatarSquare) has its platform
+          badge contained inside a 24-px box (the badge `box-shadow`
+          ring extends visually past the box but doesn't affect layout
+          flow), so we no longer need the `-ml-[7px]` compensation
+          that used to pull the legacy 31-px rectangular avatar's
+          badge-overflow out of the gap calculation. */}
       <div className="flex items-center gap-[8px] flex-shrink-0">
-        <ProfileAvatar profile={profile} size="L" />
+        <ProfileAvatarSquare profile={profile} />
         <span
-          className="text-[12px] text-[#363439] whitespace-nowrap max-w-[120px] truncate -ml-[7px]"
+          className="text-[12px] text-[#363439] whitespace-nowrap max-w-[120px] truncate"
           style={{ lineHeight: '22px', fontFamily: 'IBM Plex Sans, sans-serif' }}
         >
           {profile.name}

@@ -31,6 +31,19 @@ export type TemplateScope = 'full' | 'beta';
 /** Reports table state — drives data + list-level chrome (filter chips). */
 export type ReportListState = 'empty' | 'few' | 'many' | 'filtered';
 
+/** Report-builder sidebar architecture.  Two iterations live side-by-
+ *  side so we can compare them without rebuilding either:
+ *    • 'combined' — single rail with one Add-modules panel that
+ *                   houses Network / Visual type / Elements as tabs.
+ *                   This is the existing production layout.
+ *    • 'split'    — two rail entries (Data modules + Elements) that
+ *                   each open their own panel; the Elements panel
+ *                   has no tabs/filters since it only carries layout
+ *                   primitives (Text, Heading, Image, …).  New
+ *                   iteration we're testing.
+ */
+export type SidebarMode = 'combined' | 'split';
+
 /** Independent UI capability flags.  Each one gates a surface that's
  *  built but not yet ready to ship — toggling exposes it for review
  *  without removing any code. Default OFF (production scope) on first
@@ -49,6 +62,11 @@ export interface Scenario {
   templateScope: TemplateScope;
   reportListState: ReportListState;
   features: ScenarioFeatures;
+  /** Which report-builder sidebar architecture to render.  Defaults
+   *  to 'combined' (the existing production layout) so first-visit
+   *  users see the shipping shape; designers flip to 'split' to
+   *  preview the new IA. */
+  sidebarMode: SidebarMode;
 }
 
 const DEFAULT_SCENARIO: Scenario = {
@@ -58,6 +76,7 @@ const DEFAULT_SCENARIO: Scenario = {
     rename: false,
     sorting: false,
   },
+  sidebarMode: 'combined',
 };
 
 const STORAGE_KEY = 'report-builder.scenario.v1';
@@ -98,7 +117,11 @@ function readPersisted(): Scenario {
       rename: parsed.features?.rename === true,
       sorting: parsed.features?.sorting === true,
     };
-    return { templateScope, reportListState, features };
+    const sidebarMode: SidebarMode =
+      parsed.sidebarMode === 'split' || parsed.sidebarMode === 'combined'
+        ? parsed.sidebarMode
+        : DEFAULT_SCENARIO.sidebarMode;
+    return { templateScope, reportListState, features, sidebarMode };
   } catch {
     return DEFAULT_SCENARIO;
   }
@@ -126,7 +149,8 @@ export function useScenario(): [Scenario, (next: Scenario) => void] {
       persisted.templateScope !== DEFAULT_SCENARIO.templateScope ||
       persisted.reportListState !== DEFAULT_SCENARIO.reportListState ||
       persisted.features.rename !== DEFAULT_SCENARIO.features.rename ||
-      persisted.features.sorting !== DEFAULT_SCENARIO.features.sorting;
+      persisted.features.sorting !== DEFAULT_SCENARIO.features.sorting ||
+      persisted.sidebarMode !== DEFAULT_SCENARIO.sidebarMode;
     if (differs) {
       setScenarioState(persisted);
     }

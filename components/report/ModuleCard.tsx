@@ -568,13 +568,24 @@ function ModuleCardImpl({
         <h3 className="text-[14px] font-normal text-[#363439] leading-none">
           {definition.name}
         </h3>
-        {/* Figma 1026:38626 — info icon, 16px tile. */}
+        {/* Figma 1026:38626 — info icon, 16-px tile, stroke
+            `DARK/dark--tint_30 (#626165)` per the Figma variable
+            binding (NOT the title's #363439 — the icon reads softer
+            than the label so it doesn't compete with the metric
+            title).  Native asset ships with NO stroke-width attribute,
+            i.e. the SVG default of 1.  Library default is 1.5 +
+            non-scaling-stroke, which renders too heavy at 16-px tile,
+            so override to 1 to match Figma. */}
         <button
           type="button"
           className="flex-shrink-0 flex items-center justify-center"
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <IconInfo size={16} color="#363439" />
+          <IconInfo
+            size={16}
+            color="#626165"
+            className="[&_path]:[stroke-width:1]"
+          />
         </button>
       </div>
 

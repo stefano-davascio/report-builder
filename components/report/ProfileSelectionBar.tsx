@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   IconClose,
   IconCalendar,
@@ -20,6 +21,7 @@ import {
   ALL_PROFILES,
 } from '@/lib/profile-data';
 import { ProfileAvatar } from './ProfileAvatar';
+import { ProfileAvatarSquare } from './ProfileAvatarSquare';
 import { PlatformIcon } from './PlatformIcon';
 import { ProfileChip } from './ProfileChip';
 
@@ -52,27 +54,24 @@ function Checkbox({ state }: { state: 'checked' | 'unchecked' | 'indeterminate' 
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 /**
- * Status pill — Figma node 1285:58914 (Tags).
+ * Status pill — Figma 685:33309 (Reconnect) / 685:33310 (Permission) /
+ * 685:33311 (Syncing).
  *
  * Hard geometry specs from the design:
- *   • container — `flex items-center justify-end`, `h-[20px]`, `p-[4px]`,
- *                 `gap-[4px]`, `rounded-[4px]`. The 20-px hard cap is
- *                 explicit on every variant; without it the 14-px icon
- *                 would push the badge to 22 px (14 + 4 + 4 chrome).
- *   • icon slot — `size-[14px]`, `overflow-clip` so the 14-px glyph is
- *                 centered inside the 12-px inner content row (20 − 4 − 4)
- *                 with the 1-px overshoot cropped top/bottom, matching
- *                 Figma's render exactly.
+ *   • container — `flex items-center justify-end gap-[4px] p-[4px]
+ *                 rounded-[4px]`.  Height is content-driven (no fixed
+ *                 cap in Figma) — naturally settles at ~26 px (4 +
+ *                 18-line-height label + 4).
+ *   • icon slot — 14-px glyph, native asset stroke-width = 1 (no
+ *                 attribute set on the path → SVG default).  Library
+ *                 default 1.5 reads heavy at this size, so override
+ *                 via `[&_path]:[stroke-width:1]`.
  *   • label     — IBM Plex Sans 12 / 18, regular weight.
  *
- * Variant tokens (from Figma "Tags" frame):
- *   • Reconnect  — bg #FCE7E9 (DANGER/danger--tint_90)   fg #CE091C (DANGER/danger--shade_10)   icon `danger`
- *   • Permission — bg #FCE7E9 (DANGER/danger--tint_90)   fg #CE091C (DANGER/danger--shade_10)   icon `warning`
- *   • Syncing    — bg #FFF3CD (WARNING/warning--tint_80) fg #806104 (WARNING/warning--shade_50) icon `hourglass`
- *
- * Icons come from `SendiIcons` (not raw asset-server SVGs) so stroke
- * weight, color, and tile alignment stay in lock-step with the rest of
- * the icon library.
+ * Variant tokens:
+ *   • Reconnect  — bg #FCE7E9 fg #CE091C icon `danger`    label "Reconnect profile"
+ *   • Permission — bg #FCE7E9 fg #CE091C icon `warning`   label "Permission needed"
+ *   • Syncing    — bg #FFF3CD fg #806104 icon `hourglass` label "Syncing Data"
  */
 function StatusBadge({ status }: { status: NonNullable<ProfileStatus> }) {
   const config = {
@@ -84,10 +83,10 @@ function StatusBadge({ status }: { status: NonNullable<ProfileStatus> }) {
 
   return (
     <div
-      className="flex h-[20px] items-center justify-end gap-[4px] p-[4px] rounded-[4px] flex-shrink-0"
+      className="flex items-center justify-end gap-[4px] p-[4px] rounded-[4px] flex-shrink-0"
       style={{ backgroundColor: config.bg }}
     >
-      <span className="flex items-center justify-center overflow-hidden flex-shrink-0">
+      <span className="flex items-center justify-center flex-shrink-0 [&_path]:[stroke-width:1]">
         <Icon size={14} color={config.color} />
       </span>
       <span
@@ -102,32 +101,243 @@ function StatusBadge({ status }: { status: NonNullable<ProfileStatus> }) {
 
 // ─── Overflow chip ────────────────────────────────────────────────────────────
 /**
- * Overflow chip per Figma 1109:103254 (view) / 1026:39263 (edit). Shape is
- * the same `h-[32px] bg-[#F3F3F4] rounded-[4px]` as a profile chip; only
- * the × button is gated. In view mode the chip reads as read-only "+N",
- * `text-[#363439]` (matches the surrounding chip text); in edit mode the
- * count shifts to `text-[#4C4B4F]` medium + a clear-all affordance.
+ * Overflow chip — Figma 1821:76054 (clean) / 1826:76612 (error) +
+ * dropdown 1821:76046 (clean) / 1826:76604 (error).
+ *
+ * Visual contract:
+ *   • Trigger chip — `h-[32px] py-[4px] rounded-[4px] border`. Padding
+ *     varies by variant: clean uses `pl-[6px] pr-[4px]`, error uses
+ *     `pl-[6px] pr-[2px]` (the 2-px reduction makes room for the
+ *     warning icon button before the X).
+ *       ─ Clean variant: `bg-[#F3F3F4] border-[#F3F3F4]`, +N + X.
+ *       ─ Error variant: `bg-[rgba(229,10,31,0.05)] border-[#FACED2]`,
+ *                        +N + 14-px warning triangle + X.
+ *   • Dropdown popover — `bg-white border border-[#E8E8E9] p-[8px]
+ *     gap-[10px] rounded-[4px]` + 2-stack drop shadow.  Each row is a
+ *     mini profile chip with the same per-variant chrome as the
+ *     trigger; the row is errored when the profile's `status` is
+ *     `permission` or `reconnect`.
+ *   • Trigger body click → toggles the dropdown.  The trailing X on
+ *     the trigger fires `onClear` (clear all overflowed profiles)
+ *     with `stopPropagation` so it doesn't double-fire as a body
+ *     click.  Per-row X in the dropdown fires `onRemoveProfile`.
+ *
+ * Error gating: the trigger paints the danger variant whenever ANY
+ * profile in the overflowed set has a degraded status — gives the
+ * user a peripheral signal to "look inside" without having to open
+ * the popover first.
  */
-function OverflowChip({ count, onClear }: { count: number; onClear?: () => void }) {
+function OverflowChip({
+  profiles,
+  onRemoveProfile,
+  onClear,
+}: {
+  profiles: MockProfile[];
+  /** Per-profile remove — edit-mode only.  When omitted, the dropdown
+   *  rows render in read-only mode (no per-row X). */
+  onRemoveProfile?: (id: string) => void;
+  /** Clear-all — edit-mode only.  Wired to the trigger's trailing X. */
+  onClear?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const count = profiles.length;
+  const hasError = profiles.some(
+    (p) => p.status === 'permission' || p.status === 'reconnect',
+  );
+
+  // Popover position — portaled to `document.body` because the
+  // chip row has `overflow-hidden` (it clips chips that don't fit
+  // the row), which would otherwise clip the dropdown too.  Fixed
+  // positioning + `getBoundingClientRect` of the trigger keeps the
+  // popover anchored under the chip across scroll + resize.
+  const [popoverPos, setPopoverPos] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+  useLayoutEffect(() => {
+    if (!open) {
+      setPopoverPos(null);
+      return;
+    }
+    const anchor = ref.current;
+    if (!anchor) return;
+    const update = () => {
+      const rect = anchor.getBoundingClientRect();
+      setPopoverPos({ top: rect.bottom + 4, left: rect.left });
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [open]);
+
+  // Outside-click + Escape close the popover.  "Inside" includes
+  // both the trigger (`ref`) AND the portaled popover (`popoverRef`),
+  // since the popover is no longer a DOM descendant of the trigger.
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (ref.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  if (count === 0) return null;
+
   return (
-    <div className="flex items-center gap-[8px] h-[32px] pl-[6px] pr-[2px] py-[4px] bg-[#F3F3F4] border border-[#F3F3F4] rounded-[4px] flex-shrink-0">
-      {/* Count label — Figma 1373:371094 specs `text-[#363439]` 12 Regular
-          leading 22 in BOTH modes; the edit-mode chrome is carried by the
-          trailing × button, not by bumping the count to medium-weight. */}
-      <span
-        className="text-[12px] text-[#363439] whitespace-nowrap"
-        style={{ lineHeight: '22px', fontFamily: 'IBM Plex Sans, sans-serif' }}
+    <div ref={ref} className="relative flex-shrink-0">
+      {/* Trigger chip — body opens the popover; trailing X clears
+          all overflowed profiles. */}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        aria-label={`${count} more profile${count === 1 ? '' : 's'}`}
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setOpen((o) => !o);
+          }
+        }}
+        className={cn(
+          'flex items-center h-[32px] py-[4px] border rounded-[4px] cursor-pointer transition-colors',
+          hasError
+            ? 'bg-[rgba(229,10,31,0.05)] border-[#FACED2] pl-[6px] pr-[2px]'
+            : 'bg-[#F3F3F4] border-[#F3F3F4] pl-[6px] pr-[4px]',
+        )}
       >
-        +{count}
-      </span>
-      {onClear && (
-        <button
-          onClick={onClear}
-          className="flex items-center justify-center w-[24px] h-[24px] rounded-[4px] hover:bg-[#E8E8E9] transition-colors"
-          aria-label="Clear all profiles"
+        <span
+          className="text-[12px] text-[#363439] whitespace-nowrap"
+          style={{ lineHeight: '22px', fontFamily: 'IBM Plex Sans, sans-serif' }}
         >
-          <IconClose size={16} color="#79787B" />
-        </button>
+          +{count}
+        </span>
+        {hasError && (
+          <span
+            aria-hidden
+            className="flex items-center justify-center w-[24px] h-[24px] flex-shrink-0"
+          >
+            <IconWarning
+              size={14}
+              color="#CE091C"
+              // Native asset has no stroke-width attribute (defaults
+              // to 1).  Library default 1.5 reads heavy; 1 matches
+              // the Figma render exactly.
+              className="[&_path]:[stroke-width:1]"
+            />
+          </span>
+        )}
+        {onClear && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClear();
+            }}
+            aria-label="Clear all overflowed profiles"
+            className="flex items-center justify-center w-[24px] h-[24px] rounded-[4px] hover:bg-[rgba(32,30,36,0.05)] transition-colors cursor-pointer flex-shrink-0"
+          >
+            <IconClose
+              size={16}
+              color="#201E24"
+              // Native chip-X stroke is 0.98 — the same override
+              // used on the filter chips' X (Figma 1689:76876).
+              className="[&_path]:[stroke-width:0.98]"
+            />
+          </button>
+        )}
+      </div>
+
+      {open && popoverPos && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={popoverRef}
+          className={cn(
+            'z-50 flex flex-col gap-[10px]',
+            'bg-white border border-[#E8E8E9] rounded-[4px] p-[8px]',
+          )}
+          style={{
+            position: 'fixed',
+            top: popoverPos.top,
+            left: popoverPos.left,
+            // Figma "Is Floating" effect — 2-stack drop shadow at
+            // alpha 0.1 each.
+            boxShadow:
+              '0px 4px 8px 0px rgba(32,30,36,0.1), 0px 8px 16px 0px rgba(32,30,36,0.1)',
+          }}
+        >
+          {profiles.map((profile) => {
+            const rowError =
+              profile.status === 'permission' || profile.status === 'reconnect';
+            return (
+              <div
+                key={profile.id}
+                className={cn(
+                  'flex h-[32px] items-center py-[4px] border rounded-[4px]',
+                  rowError
+                    ? 'bg-[rgba(229,10,31,0.05)] border-[#FACED2] pl-[6px] pr-[2px]'
+                    : 'bg-[#F3F3F4] border-[#F3F3F4] pl-[6px] pr-[4px]',
+                )}
+              >
+                <div className="flex gap-[8px] items-center flex-shrink-0">
+                  <ProfileAvatarSquare profile={profile} />
+                  <span
+                    className="text-[12px] text-[#363439] whitespace-nowrap"
+                    style={{
+                      lineHeight: '22px',
+                      fontFamily: 'IBM Plex Sans, sans-serif',
+                    }}
+                  >
+                    {profile.name}
+                  </span>
+                </div>
+                {rowError && (
+                  <span
+                    aria-hidden
+                    className="flex items-center justify-center w-[24px] h-[24px] flex-shrink-0"
+                  >
+                    <IconWarning
+                      size={14}
+                      color="#CE091C"
+                      className="[&_path]:[stroke-width:1]"
+                    />
+                  </span>
+                )}
+                {onRemoveProfile && (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveProfile(profile.id)}
+                    aria-label={`Remove ${profile.name}`}
+                    className="flex items-center justify-center w-[24px] h-[24px] rounded-[4px] hover:bg-[rgba(32,30,36,0.05)] transition-colors cursor-pointer flex-shrink-0"
+                  >
+                    <IconClose
+                      size={16}
+                      color="#201E24"
+                      className="[&_path]:[stroke-width:0.98]"
+                    />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>,
+        document.body,
       )}
     </div>
   );
@@ -197,74 +407,97 @@ function SelectProfilesDropdown({
         </div>
       </div>
 
-      <div
-        className="overflow-y-auto flex flex-col px-[8px] pb-[8px]"
-        style={{ maxHeight: 368, gap: 12 }}
-      >
-        {filtered.map((group, idx) => {
-          const allSel  = group.profiles.every(p => selectedIds.has(p.id));
-          const someSel = group.profiles.some(p => selectedIds.has(p.id));
-          const groupState: 'checked' | 'unchecked' | 'indeterminate' =
-            allSel ? 'checked' : someSel ? 'indeterminate' : 'unchecked';
+      {/* List — Figma 685:32478 / 1750:36537.  Outer wrapper has
+          `py-[8px]` (8 px air above + below the list).  Inner scroll
+          container drives the height cap.  Groups are separated by a
+          1-px `#F3F3F4` divider (Figma 685:32547 / Line8) that
+          extends past the `px-[8px]` content gutter via `-mx-[8px]`,
+          so the rule paints edge-to-edge inside the dropdown.  The
+          surrounding `my-[8px]` gives 8 px breathing room above + below
+          the line, summing to the 16-px gap Figma specs between
+          groups. */}
+      <div className="py-[8px] flex-shrink-0">
+        <div
+          className="overflow-y-auto flex flex-col items-center px-[8px] pb-[8px]"
+          style={{ maxHeight: 368 }}
+        >
+          {filtered.map((group, idx) => {
+            const allSel  = group.profiles.every(p => selectedIds.has(p.id));
+            const someSel = group.profiles.some(p => selectedIds.has(p.id));
+            const groupState: 'checked' | 'unchecked' | 'indeterminate' =
+              allSel ? 'checked' : someSel ? 'indeterminate' : 'unchecked';
 
-          return (
-            <Fragment key={group.platform}>
-              {idx > 0 && (
-                // 1 px platform divider per Figma 1232:348891 (Line8).
-                // The parent's `gap: 12` provides the 12 px breathing room
-                // above and below the line — the divider is its own flex
-                // sibling so the gap applies on both sides naturally.
-                // `-mx-[8px]` lets the rule extend to the dropdown's inner
-                // edge, past the `px-[8px]` content gutter.
-                <div className="h-px bg-[#E8E8E9] -mx-[8px] flex-shrink-0" />
-              )}
-              <div className="flex flex-col">
-              <button
-                onClick={() => onToggleGroup(group.platform)}
-                className="flex items-center gap-[6px] w-full px-[8px] py-[10px] rounded-[4px] hover:bg-[#F3F3F4] transition-colors text-left"
-              >
-                <div className="flex-shrink-0">
-                  <Checkbox state={groupState} />
-                </div>
-                <div className="flex items-center gap-[4px] min-w-0">
-                  <PlatformIcon platform={group.platform} size={16} />
-                  <span
-                    className="text-[#4C4B4F] font-medium"
-                    style={{ fontSize: 14, lineHeight: '17.5px', fontFamily: 'IBM Plex Sans, sans-serif' }}
-                  >
-                    {group.label}
-                  </span>
-                </div>
-              </button>
-
-              {group.profiles.map(profile => {
-                const isSelected = selectedIds.has(profile.id);
-                const profileCheckState: 'checked' | 'unchecked' | 'indeterminate' =
-                  !isSelected ? 'unchecked' : allSel ? 'indeterminate' : 'checked';
-                return (
+            return (
+              <Fragment key={group.platform}>
+                {idx > 0 && (
+                  <div
+                    aria-hidden
+                    className="self-stretch h-px bg-[#F3F3F4] my-[8px] -mx-[8px] flex-shrink-0"
+                  />
+                )}
+                <div className="flex flex-col items-start w-full">
+                  {/* Group header — Figma 685:32479. Hover is
+                      brand-purple `rgba(81,61,217,0.1)`
+                      (PRIMARY/primary--alpha_05), NOT a neutral
+                      grey — matches the same hover token the profile
+                      rows use, so the dropdown reads as one cohesive
+                      surface. Inner `gap-[6px]` between checkbox and
+                      label cluster, with a `gap-[4px]` between the
+                      network glyph and the label text per Figma. */}
                   <button
-                    key={profile.id}
-                    onClick={() => onToggleProfile(profile.id)}
-                    className="flex items-center gap-[6px] w-full pl-[32px] pr-[8px] py-[10px] rounded-[4px] hover:bg-[#F3F3F4] transition-colors text-left"
+                    onClick={() => onToggleGroup(group.platform)}
+                    className="flex items-center gap-[6px] w-full px-[8px] py-[10px] rounded-[4px] hover:bg-[rgba(81,61,217,0.1)] transition-colors text-left"
                   >
                     <div className="flex-shrink-0">
-                      <Checkbox state={profileCheckState} />
+                      <Checkbox state={groupState} />
                     </div>
-                    <ProfileAvatar profile={profile} size="S" />
-                    <span
-                      className="flex-1 text-[#201E24] truncate"
-                      style={{ fontSize: 14, lineHeight: '17.5px', fontFamily: 'IBM Plex Sans, sans-serif' }}
-                    >
-                      {profile.name}
-                    </span>
-                    {profile.status && <StatusBadge status={profile.status} />}
+                    <div className="flex items-center gap-[4px] min-w-0">
+                      <PlatformIcon platform={group.platform} size={16} />
+                      <span
+                        className="text-[#4C4B4F] font-medium"
+                        style={{ fontSize: 14, lineHeight: '17.5px', fontFamily: 'IBM Plex Sans, sans-serif' }}
+                      >
+                        {group.label}
+                      </span>
+                    </div>
                   </button>
-                );
-              })}
-              </div>
-            </Fragment>
-          );
-        })}
+
+                  {group.profiles.map(profile => {
+                    const isSelected = selectedIds.has(profile.id);
+                    const profileCheckState: 'checked' | 'unchecked' | 'indeterminate' =
+                      !isSelected ? 'unchecked' : allSel ? 'indeterminate' : 'checked';
+                    return (
+                      // Profile row — Figma 685:32486. Asymmetric
+                      // padding `pl-[16px] pr-[8px]` tucks the rows
+                      // under the group label by 16 px.  Avatar is
+                      // 24 px wide per Figma 685:32489 (was 20.67
+                      // via `size="S"` — too small).  Inner content
+                      // gap-[6px] between checkbox and the avatar+name
+                      // cluster.
+                      <button
+                        key={profile.id}
+                        onClick={() => onToggleProfile(profile.id)}
+                        className="flex items-center gap-[6px] w-full pl-[16px] pr-[8px] py-[10px] rounded-[4px] hover:bg-[rgba(81,61,217,0.1)] transition-colors text-left"
+                      >
+                        <div className="flex-shrink-0">
+                          <Checkbox state={profileCheckState} />
+                        </div>
+                        <ProfileAvatarSquare profile={profile} />
+                        <span
+                          className="flex-1 text-[#201E24] truncate"
+                          style={{ fontSize: 14, lineHeight: '17.5px', fontFamily: 'IBM Plex Sans, sans-serif' }}
+                        >
+                          {profile.name}
+                        </span>
+                        {profile.status && <StatusBadge status={profile.status} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Fragment>
+            );
+          })}
+        </div>
       </div>
 
       <div className="flex items-center justify-end pl-[24px] pr-[8px] py-[4px] bg-white border-t border-[#F3F3F4] flex-shrink-0">
@@ -443,9 +676,13 @@ export function ProfileSelectionBar({
             onClick={() => setDropdownOpen(prev => !prev)}
             className={cn(
               'flex items-center gap-[7px] h-[32px] px-[13px] py-[1px] border rounded-[4px] transition-colors',
-              dropdownOpen
-                ? 'border-[#4D36FF] bg-[#F5F3FF]'
-                : 'border-[rgba(32,30,36,0.2)] hover:bg-[#F3F3F4]',
+              // Match the reports-landing Filter trigger open-state:
+              // the border + label stay at rest, hover fill is
+              // suppressed so the open trigger reads as neutral
+              // (1670:42280) — competing with the dropdown panel
+              // when an "active" purple fill paints underneath.
+              'border-[rgba(32,30,36,0.2)] bg-transparent',
+              !dropdownOpen && 'hover:bg-[#F3F3F4]',
             )}
           >
             <IconPlusCircle size={18} color="#201E24" className="flex-shrink-0" />
@@ -488,7 +725,8 @@ export function ProfileSelectionBar({
 
         {hiddenCount > 0 && (
           <OverflowChip
-            count={hiddenCount}
+            profiles={selectedProfiles.slice(visibleChips.length)}
+            onRemoveProfile={isEditMode ? toggleProfile : undefined}
             onClear={isEditMode ? clearAll : undefined}
           />
         )}
@@ -538,8 +776,16 @@ export function ProfileSelectionBar({
           ))}
           {selectedProfiles.length > 0 && (
             <div data-m="overflow">
+              {/* Measurement variant — passes the FULL selectedProfiles
+                  set as a worst-case width budget (the chip width
+                  varies with `+N` digit count and the presence of the
+                  warning icon, both of which depend on which profiles
+                  end up overflowed).  Reading width from the worst-case
+                  shape guarantees the layout effect never picks a
+                  fitting count that would actually clip the trigger. */}
               <OverflowChip
-                count={Math.max(1, selectedProfiles.length - chipCandidates.length + 1)}
+                profiles={selectedProfiles}
+                onRemoveProfile={isEditMode ? () => undefined : undefined}
                 onClear={isEditMode ? () => undefined : undefined}
               />
             </div>
