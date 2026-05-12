@@ -694,7 +694,12 @@ function ModuleCardImpl({
         )}
       >
         {getModuleContent(module, definition, contentHeight, contentWidth, profilesForModule)}
-        {isMissingNetworkMatch && networkBinding !== 'cross-network' && (
+        {/* `networkBinding` is narrowed to `Platform` here by TS alias
+            narrowing: `isMissingNetworkMatch` already encodes the
+            `!== 'cross-network'` check on this `const`, so the
+            secondary comparison would be a redundant
+            no-overlap-type error. */}
+        {isMissingNetworkMatch && (
           <NetworkMissingOverlay network={networkBinding} />
         )}
       </div>
