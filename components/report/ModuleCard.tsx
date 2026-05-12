@@ -1,9 +1,15 @@
 'use client';
 
 import { memo, useEffect, useRef, useState } from 'react';
-import { ReportModule, ModuleDefinition, ChartType } from '@/types';
-import { IconInfo, IconDragHandle } from '@/components/icons/FigmaIcons';
+import { ReportModule, ModuleDefinition, ChartType, Platform } from '@/types';
+import {
+  IconInfo,
+  IconDragHandle,
+} from '@/components/icons/FigmaIcons';
+import { IconActivity } from '@/components/icons/SendiIcons';
 import { MockProfile } from '@/lib/profile-data';
+import { deriveModuleWarning } from '@/lib/profile-status';
+import { ModuleWarningIcon } from './ModuleWarningIcon';
 import { ChartRenderer, PieChartRenderer } from './ChartRenderer';
 import { MetricCardModule } from './MetricCardModule';
 import { TableModule } from './TableModule';
@@ -391,6 +397,22 @@ function getModuleContent(
   );
 }
 
+// ─── ModuleBanner (removed) ──────────────────────────────────────────────
+//
+// The legacy per-module banner (`ModuleBanner` + compact
+// `ModuleBannerTag`) was replaced by the two-tier warning system:
+//
+//   • Per-module     → `ModuleWarningIcon` (next to the title) — a
+//                      compact glyph + tooltip carrying name/count of
+//                      affected profiles.  No more in-card banner that
+//                      occluded data.
+//   • Canvas-level   → `GlobalDataWarningBanner` (top of canvas) —
+//                      the "Action required" surface, but now rendered
+//                      ONCE for the whole report instead of per module.
+//
+// See `lib/profile-status.ts` for the severity derivation and
+// `components/report/ModuleWarningIcon.tsx` for the icon component.
+
 function ModuleCardImpl({
   module,
   definition,
@@ -408,6 +430,39 @@ function ModuleCardImpl({
   // state so moving the cursor from the card into the portaled
   // dropdown surface doesn't unmount the dropdown mid-click.
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+
+  // Filter globally-selected profiles to the platforms this module's
+  // definition supports.  Computed early because the banner derivation
+  // + contentHeight calculation both depend on it.
+  //
+  // `module.network` narrows that further:
+  //   • A specific platform key (e.g. 'tiktok') — module was dragged from
+  //     a network-specific tab; only profiles on that network count, and
+  //     if there are none we render the "Select a matching profile"
+  //     empty state (Figma 1916:37020).
+  //   • `'cross-network'` or undefined (legacy) — keep the broad
+  //     definition-driven filter.
+  const platformSet = new Set<string>(definition.platforms);
+  const networkBinding = module.network ?? 'cross-network';
+  const profilesForModule = selectedProfiles.filter((p) => {
+    if (networkBinding !== 'cross-network') return p.platform === networkBinding;
+    return platformSet.has(p.platform);
+  });
+  // True when the module is bound to a specific network but the user
+  // hasn't selected a profile on that network. Drives the blurred
+  // empty-state overlay rendered below the chart content.
+  const isMissingNetworkMatch =
+    networkBinding !== 'cross-network' && profilesForModule.length === 0;
+
+  // Warning derivation — Case 2 (reconnect / permission) takes
+  // precedence over Case 1 (partial data) so a module that has both
+  // statuses surfaces only the actionable red triangle, never both.
+  // See `lib/profile-status.ts` for the classification rules.  The
+  // returned `profiles` is the affected subset; tooltip copy keys off
+  // the names + count.
+  const { severity: warningSeverity, profiles: warningProfiles } =
+    deriveModuleWarning(profilesForModule);
+
   // Figma 1168:213978 (hover) + 1168:214102 (default): every module card
   // has a 20 px inset, with the title sitting at exactly y=20. The
   // 32×32 action buttons are an ABSOLUTE overlay in the top-right —
@@ -416,15 +471,17 @@ function ModuleCardImpl({
   // title row therefore collapses to its natural 21 px line-height; a
   // 24 px gap separates it from the content body.
   //
-  // Non-content budget = 20 (top) + 14 (title, capped via leading-none)
-  //                    + 24 (gap) + 20 (bottom) = 78 px.
-  const TITLE_ROW_PX = 14;
+  // Non-content budget cases:
+  //   • No banner            → 20 + 14 (title)              + 24 + 20 = 78
+  //   • Full banner          → 20 + 14 + (banner 42)        + 24 + 20 = 120
+  //   • Compact banner-tag   → 20 + 26 (title row grows to
+  //                            tag's 26-px height)          + 24 + 20 = 90
+  // (`HEADER_GAP_PX` represents the visual gap between the title row
+  // and the content body.  Whether the gap is split — 12 above the
+  // banner + 12 below — or contiguous, the total occupied vertical
+  // space stays 24 px.)
   const HEADER_GAP_PX = 24;
   const PAD_PX = 20;
-  const contentHeight = Math.max(
-    height - (PAD_PX * 2 + TITLE_ROW_PX + HEADER_GAP_PX),
-    0,
-  );
 
   // Track content-area pixel width via ResizeObserver. The Audience
   // Growth chart (and future responsive modules) uses this to decide
@@ -465,6 +522,21 @@ function ModuleCardImpl({
     return () => ro.disconnect();
   }, []);
 
+  // The warning icon lives INSIDE the title row (right of the title,
+  // left of the info `(i)`), so it doesn't grow the row height or
+  // steal vertical budget from the chart.  The Case-2 variant is a
+  // 20 px pill — taller than the 14 px regular title height — so we
+  // bump the title row to 20 px when present to keep the icon
+  // vertically centered with the title text (avoids a 6-px clip).
+  // Case 1 is an outline 14 px glyph with no pill, so the row stays
+  // at its natural height.
+  const titleRowGrowsForBadge = warningSeverity === 'case2';
+  const TITLE_ROW_PX = titleRowGrowsForBadge ? 20 : 14;
+  const contentHeight = Math.max(
+    height - (PAD_PX * 2 + TITLE_ROW_PX + HEADER_GAP_PX),
+    0,
+  );
+
   // Hover tracking lives on the grid-item (cardRef's parent), not the
   // card itself. react-grid-layout injects the resize handle as a
   // sibling of the card inside the grid-item, so a listener on the
@@ -485,12 +557,9 @@ function ModuleCardImpl({
     };
   }, []);
 
-  // Filter globally-selected profiles to the platforms this module's
-  // definition supports. An audience-growth module that supports
-  // TikTok/Instagram/Facebook/Twitter won't show a YouTube avatar in
-  // its Networks indicator.
-  const platformSet = new Set<string>(definition.platforms);
-  const profilesForModule = selectedProfiles.filter((p) => platformSet.has(p.platform));
+  // (`profilesForModule` + `platformSet` are computed at the top of
+  // the function so the banner derivation + contentHeight calc can
+  // both read them.)
 
   // Chrome (drag handle, actions, hover border/shadow, resize grip) is
   // driven by hover OR active resize — NOT by edit-mode alone. A
@@ -517,16 +586,25 @@ function ModuleCardImpl({
           border, 6 px to the title's x=20 start (6 + 8 + 6 = 20), so
           the title position is invariant. The 24×24 tile is offset to
           x=−2 to land the grip at card x=6; the 2 px overhang is
-          clipped by the card's `overflow-hidden`. Vertical: with
-          `leading-none`, the title's 14 px line-box runs y=20→34, so
-          its visual center is y = 27. The grip's visual center inside
-          the 24-tile is at y=11.5, giving `top = 27 − 11.5 = 15.5 px`
-          to center the grip on the title. Color is DARK/dark--tint_30
-          (#626165). */}
+          clipped by the card's `overflow-hidden`.
+          Vertical centering math:
+            • Card padding-top = 20.
+            • Title row height varies: 14 px when title-only (h3
+              `leading-none`), or 20 px when the compact banner tag
+              shares the row (the tag locks the row to its own 20 px).
+              `items-center` on the row places the title's visual
+              center at row-y = row-height / 2.
+            • Title visual center in card-y = 20 + row-height / 2.
+            • The grip's visual center inside the 24-tile is at
+              tile-y = 11.5.
+            • Drag-handle `top` = title-center-y − 11.5.
+          For a 14-px row → 27 − 11.5 = 15.5.
+          For a 20-px row → 30 − 11.5 = 18.5.
+          Color is DARK/dark--tint_30 (#626165). */}
       {isEditMode && showEditChrome && (
         <div
           className="drag-handle absolute left-[-2px] flex items-center justify-center cursor-grab active:cursor-grabbing z-10"
-          style={{ top: 15.5 }}
+          style={{ top: titleRowGrowsForBadge ? 18.5 : 15.5 }}
           aria-hidden="true"
         >
           <IconDragHandle size={24} color="#626165" />
@@ -562,20 +640,25 @@ function ModuleCardImpl({
       {/* Title row — natural 21 px line-height, no compensating
           `h-[52px]` / `items-center`. Title's top edge sits at
           card-top + 20 (card padding) = exactly 20 px. Figma
-          1168:213980 — `gap-[4px] items-center`. */}
-      <div className="flex items-center gap-[4px] flex-shrink-0">
+          1168:213980 — `gap-[4px] items-center`.
+          Order per Figma 1197:269951:
+            title  →  info (i)  →  ModuleWarningIcon
+          The warning sits AFTER the info icon so the title's
+          paired-info affordance stays adjacent to the title text
+          and the warning reads as a distinct attention marker. */}
+      <div className="flex items-center gap-[4px] min-w-0 flex-shrink-0">
         {/* Figma 1026:38625 — IBM Plex Sans Regular 14 / 21, DARK/dark--tint_10 (#363439). */}
-        <h3 className="text-[14px] font-normal text-[#363439] leading-none">
+        <h3 className="text-[14px] font-normal text-[#363439] leading-none truncate">
           {definition.name}
         </h3>
         {/* Figma 1026:38626 — info icon, 16-px tile, stroke
             `DARK/dark--tint_30 (#626165)` per the Figma variable
             binding (NOT the title's #363439 — the icon reads softer
             than the label so it doesn't compete with the metric
-            title).  Native asset ships with NO stroke-width attribute,
-            i.e. the SVG default of 1.  Library default is 1.5 +
-            non-scaling-stroke, which renders too heavy at 16-px tile,
-            so override to 1 to match Figma. */}
+            title).  Native asset ships with NO stroke-width
+            attribute, i.e. the SVG default of 1.  Library default
+            is 1.5 + non-scaling-stroke, which renders too heavy at
+            16-px tile, so override to 1 to match Figma. */}
         <button
           type="button"
           className="flex-shrink-0 flex items-center justify-center"
@@ -587,16 +670,102 @@ function ModuleCardImpl({
             className="[&_path]:[stroke-width:1]"
           />
         </button>
+        {warningSeverity !== null && (
+          <ModuleWarningIcon
+            severity={warningSeverity}
+            profiles={warningProfiles}
+          />
+        )}
       </div>
 
-      {/* Content — 24 px gap from title to chart. Padding is owned by
-          the card root (`p-[20px]`), so this child only contributes
-          the header→body gap via `pt-[24px]`. */}
+      {/* Content — 24 px gap from title to chart.  Padding is owned
+          by the card root (`p-[20px]`); this child only contributes
+          the header→body gap via `pt-[24px]`.  No more banner-
+          conditional `pt-[12px]` branch: the new ModuleWarningIcon
+          lives in the title row above and doesn't carve out vertical
+          space below the row. */}
       <div
         ref={contentRef}
-        className="flex-1 pt-[24px] min-h-0 overflow-hidden"
+        className={cn(
+          // `relative` makes the empty-state overlay below position
+          // against the content box (so it covers only the chart area
+          // and not the title row).
+          'relative flex-1 min-h-0 overflow-hidden pt-[24px]',
+        )}
       >
         {getModuleContent(module, definition, contentHeight, contentWidth, profilesForModule)}
+        {isMissingNetworkMatch && networkBinding !== 'cross-network' && (
+          <NetworkMissingOverlay network={networkBinding} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Display label for each canonical `Platform` key, as used in body
+ * copy ("Data will appear here if you select a Facebook profile.").
+ * Kept here rather than in `lib/profile-data` because the empty-state
+ * is currently the only consumer; if more strings appear later this
+ * map should move to a shared `lib/platform-labels.ts`.
+ *
+ * Google Analytics is the one entry that doesn't read naturally with
+ * the trailing "profile" noun, so its label is left as "Google
+ * Analytics" — the sentence still parses ("…select a Google Analytics
+ * profile.") and matches how the filter chip itself is labelled.
+ */
+const NETWORK_DISPLAY_LABEL: Record<Platform, string> = {
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+  linkedin: 'LinkedIn',
+  'google-analytics': 'Google Analytics',
+  x: 'X',
+  threads: 'Threads',
+  bluesky: 'Bluesky',
+};
+
+/**
+ * Empty-state overlay rendered over a module's chart area when its
+ * `network` binding doesn't match any of the user's currently-selected
+ * profiles.  Figma 1916:37020.
+ *
+ * The chart skeleton (axes / mock data / legend) still renders
+ * underneath — we don't blank it out — so the overlay's translucent
+ * white wash + `backdrop-blur` creates the "data is there but
+ * locked behind a profile selection" feel.
+ *
+ * Positioning is `absolute inset-0`; the parent provides `relative`
+ * and `overflow-hidden` so the overlay clips to the rounded content
+ * area instead of bleeding past the card chrome.
+ *
+ * Body copy names the specific network ("…select a TikTok profile.")
+ * rather than the generic "compatible profile" so the user knows
+ * exactly which add-profile flow to follow.
+ */
+function NetworkMissingOverlay({ network }: { network: Platform }) {
+  const label = NETWORK_DISPLAY_LABEL[network];
+  return (
+    <div
+      // BRAND/light @ 80% alpha + 5 px backdrop blur per Figma
+      // 1916:37020. `rounded-[6px]` matches the card's inner content
+      // radius; without it the overlay corners square off where the
+      // surrounding card has 6 px rounding.
+      className="absolute inset-0 flex flex-col items-center justify-center gap-[16px] bg-[rgba(255,255,255,0.8)] backdrop-blur-[5px] rounded-[6px]"
+      // Block pointer events from bleeding into the chart underneath
+      // (e.g. Recharts tooltip hover), which would feel wrong given
+      // the chart isn't actionable in this state.
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <IconActivity size={32} color="#4D36FF" />
+      <div className="flex flex-col items-center max-w-[345px] px-[16px] text-center">
+        <p className="text-[16px] leading-[24px] font-medium text-[#201E24]">
+          Select a matching profile to see data
+        </p>
+        <p className="text-[14px] leading-[21px] font-normal text-[#626165]">
+          {`Data will appear here if you select a ${label} profile.`}
+        </p>
       </div>
     </div>
   );

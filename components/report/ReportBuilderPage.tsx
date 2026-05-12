@@ -10,6 +10,9 @@ import { ProfileSelectionBar } from './ProfileSelectionBar';
 import { ReportCanvas } from './ReportCanvas';
 import { EmptyBoardCard } from './EmptyBoardCard';
 import { AddModulePanel } from './AddModulePanel';
+import { GlobalDataWarningBanner } from './GlobalDataWarningBanner';
+import { deriveGlobalCase2Profiles } from '@/lib/profile-status';
+import { MODULE_DEFINITIONS } from '@/lib/mock-data';
 
 // Charts in lib/mock-data.ts declare `defaultH` in OLD-units (multiples
 // of 6 = Figma cells), kept that way so the catalog stays human-readable.
@@ -30,7 +33,7 @@ import {
   IconElements,
 } from '@/components/icons/FigmaIcons';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import type { SidebarMode } from '@/lib/scenario';
+import type { SidebarMode, CanvasMode } from '@/lib/scenario';
 
 /**
  * Which panel surface is currently visible in the report builder.
@@ -120,6 +123,22 @@ function LeftSidebar({
 
           {/* Hairline divider — Figma `Line 13`, full rail width. */}
           <div className="h-px w-full bg-[#E8E8E9]" aria-hidden="true" />
+
+          {/* Modules — round 40×40 (rounded-[90px]) bars glyph.  Sits
+              between the divider and Settings as a secondary action,
+              same chrome as Settings so the two read as a paired
+              cluster of tertiary tools.  Stub for now (the panel
+              hosts the modules list above; this is decorative chrome
+              for parity with combined mode). */}
+          <Tooltip>
+            <TooltipTrigger
+              aria-label="Modules"
+              className="w-10 h-10 flex items-center justify-center rounded-[90px] bg-transparent text-[#4C4B4F] hover:bg-[#F3F3F4] transition-colors"
+            >
+              <IconModules size={20} color="#4C4B4F" />
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>Modules</TooltipContent>
+          </Tooltip>
 
           {/* Settings — round 40×40 (rounded-[90px] per Figma) so it
               reads as a secondary tertiary action distinct from the
@@ -219,6 +238,12 @@ interface ReportBuilderPageProps {
    *  by the Scenario Switcher; defaults to 'combined' so first-visit
    *  / non-scenario users see the production layout. */
   sidebarMode?: SidebarMode;
+  /** Canvas treatment — design-comparison toggle from the Scenario
+   *  Switcher.  `'white'` keeps the existing white-card chrome;
+   *  `'grey'` strips the card + its 24 px inset so modules sit
+   *  directly on the page's `#F3F3F4` background.  Defaults to
+   *  `'white'` for production parity. */
+  canvasMode?: CanvasMode;
 }
 
 export function ReportBuilderPage({
@@ -228,8 +253,35 @@ export function ReportBuilderPage({
   onBack,
   onSave: onSaveProp,
   sidebarMode = 'combined',
+  canvasMode = 'white',
 }: ReportBuilderPageProps = {}) {
-  const startingModules = initialModules ?? DEFAULT_MODULES;
+  // Normalize divider modules at construction time.  Earlier dividers
+  // shipped with `h: 30` (the old default) which left ~35 px of dead
+  // space below the rule before the next module.  We now lock divider
+  // h / minH / maxH to 21 (chrome height + BOTTOM_GAP_PX), so any
+  // legacy divider with an oversized stored h gets clamped down on
+  // first render — both new + saved reports converge on the tight
+  // layout without requiring the user to re-drop or resize.
+  const startingModules = (initialModules ?? DEFAULT_MODULES).map((m) => {
+    if (m.elementKind !== 'divider') return m;
+    const targetH = 21;
+    if (
+      m.layout.h === targetH &&
+      m.layout.minH === targetH &&
+      m.layout.maxH === targetH
+    ) {
+      return m;
+    }
+    return {
+      ...m,
+      layout: {
+        ...m.layout,
+        h: targetH,
+        minH: targetH,
+        maxH: targetH,
+      },
+    };
+  });
   const [modules, setModules] = useState<ReportModule[]>(startingModules);
   const [savedModules, setSavedModules] = useState<ReportModule[]>(startingModules);
   // Empty initial modules ⇒ "Start from scratch" — drop the user
@@ -289,11 +341,50 @@ export function ReportBuilderPage({
   // Add-modules panel. While set, ReportCanvas enables its drop target and
   // renders a placeholder sized to this definition's default w/h.
   const [draggingDefinition, setDraggingDefinition] = useState<ModuleDefinition | null>(null);
+  // Network binding for the in-flight drag — captured at dragStart from the
+  // panel's active filter tab. Stored separately from `draggingDefinition`
+  // because ReportCanvas's onDropModuleAt callback signature is
+  // `(def, x, y)` (no network arg); we read it back from state in the drop
+  // handler. Defaults to `'cross-network'` while idle.
+  const [draggingNetwork, setDraggingNetwork] = useState<
+    import('@/types').Platform | 'cross-network'
+  >('cross-network');
   // Mirrors `draggingDefinition` for the Elements tab — Text / Heading 1 /
   // Heading 2 etc. carry no chart/data binding so they need a separate
   // drag-state slot. The two are mutually exclusive in practice (the panel
   // only ever drags one row at a time).
   const [draggingElement, setDraggingElement] = useState<ElementDefinition | null>(null);
+
+  // ─── Global data-warning banner state ─────────────────────────────
+  //
+  // `bannerDismissed` is session-only — `useState` (not localStorage)
+  // so a page reload re-evaluates whether the banner should appear.
+  // `selectProfilesOpenTrigger` is a numeric counter; bumping it on
+  // the banner's "Fix in Select profiles →" click forces
+  // `ProfileSelectionBar` to imperatively open its picker dropdown
+  // (see the `openTrigger` prop on that component).  Numeric so two
+  // consecutive clicks both fire even if the dropdown is already
+  // open.
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [selectProfilesOpenTrigger, setSelectProfilesOpenTrigger] = useState(0);
+
+  // Pre-compute a definitions-by-id map once so the warning derivation
+  // doesn't linear-scan MODULE_DEFINITIONS for every module on every
+  // render.  Module catalog is static, hence the empty dep array.
+  const definitionsById = useMemo(
+    () => new Map(MODULE_DEFINITIONS.map((d) => [d.id, d])),
+    [],
+  );
+
+  // Distinct union of Case-2 profiles affecting any visible module.
+  // Memoized on the same deps the helper actually reads — module
+  // structure, definition map, and the user's current selection.  An
+  // empty array means there's nothing to warn about, and the global
+  // banner skips its render.
+  const affectedCase2Profiles = useMemo(
+    () => deriveGlobalCase2Profiles(modules, definitionsById, selectedProfiles),
+    [modules, definitionsById, selectedProfiles],
+  );
 
   const canvasRef = useRef<HTMLDivElement>(null);
   // While the Add-modules panel is mid-slide, the canvas (flex-1) is
@@ -337,7 +428,10 @@ export function ReportBuilderPage({
     setActivePanel(null);
   }, [savedModules]);
 
-  const handleAddModule = useCallback((definition: ModuleDefinition) => {
+  const handleAddModule = useCallback((
+    definition: ModuleDefinition,
+    network: import('@/types').Platform | 'cross-network' = 'cross-network',
+  ) => {
     const maxY = modules.reduce((max, m) => Math.max(max, m.layout.y + m.layout.h), 0);
     // uid() — see lib/utils.ts for why Date.now() alone isn't enough.
     const newId = `mod-${definition.id}-${uid()}`;
@@ -345,6 +439,12 @@ export function ReportBuilderPage({
       id: newId,
       definitionId: definition.id,
       chartType: definition.defaultChartType,
+      // `network` mirrors the panel's active filter tab at click time
+      // (see AddModulePanel.ModuleNetworkBinding). Carried on the module
+      // so ModuleCard can filter the user's profiles down to the right
+      // platform and surface the "Select a matching profile" empty state
+      // when none of them match.
+      network,
       layout: {
         i: newId,
         x: 0,
@@ -374,6 +474,12 @@ export function ReportBuilderPage({
         id: newId,
         definitionId: definition.id,
         chartType: definition.defaultChartType,
+        // Stamp the in-flight drag's network binding onto the new module.
+        // `draggingNetwork` was set in handleDragStartModule from the
+        // panel's active filter tab — by the time the drop lands it
+        // still holds the right value (handleDragEndModule fires AFTER
+        // this callback when the drop succeeds).
+        network: draggingNetwork,
         layout: {
           i: newId,
           x: clampedX,
@@ -390,11 +496,15 @@ export function ReportBuilderPage({
       setModules((prev) => [...prev, newModule]);
       setDraggingDefinition(null);
     },
-    [],
+    [draggingNetwork],
   );
 
-  const handleDragStartModule = useCallback((def: ModuleDefinition) => {
+  const handleDragStartModule = useCallback((
+    def: ModuleDefinition,
+    network: import('@/types').Platform | 'cross-network' = 'cross-network',
+  ) => {
     setDraggingDefinition(def);
+    setDraggingNetwork(network);
   }, []);
 
   const handleDragEndModule = useCallback(() => {
@@ -471,6 +581,39 @@ export function ReportBuilderPage({
     [],
   );
 
+  // Build a fresh ReportModule for the standalone Divider element.
+  // No `html` / `emoji` / `textStyle` — the renderer is purely visual,
+  // so the only meaningful module fields are id + layout.
+  //
+  // h / minH / maxH are all locked to `def.defaultH` so the cell can't
+  // be vertically resized.  The divider's chrome is fixed at 25 px,
+  // and any extra cell height would just leave dead space below the
+  // rule (visibly enlarging the gap to the next module — not the
+  // user's intent when they grab the resize grip).  Width still
+  // resizes freely (1..4 columns) since the rule's span IS meaningful.
+  const buildDividerElementModule = useCallback(
+    (def: ElementDefinition, x: number, y: number): ReportModule => {
+      const newId = `el-${def.id}-${uid()}`;
+      return {
+        id: newId,
+        definitionId: `element:${def.id}`,
+        chartType: 'text',
+        elementKind: 'divider',
+        layout: {
+          i: newId,
+          x,
+          y,
+          w: Math.min(def.defaultW, 4),
+          h: def.defaultH,
+          minW: def.minW,
+          minH: def.defaultH,
+          maxH: def.defaultH,
+        },
+      };
+    },
+    [],
+  );
+
   const handleAddElement = useCallback(
     (def: ElementDefinition) => {
       // Emoji is its own renderer.  Branch first so it doesn't fall
@@ -483,11 +626,19 @@ export function ReportBuilderPage({
         });
         return;
       }
+      // Divider is also its own renderer — non-text, non-data.
+      if (def.id === 'divider') {
+        setModules((prev) => {
+          const maxY = prev.reduce((max, m) => Math.max(max, m.layout.y + m.layout.h), 0);
+          return [...prev, buildDividerElementModule(def, 0, maxY)];
+        });
+        return;
+      }
       const textStyle = elementKindToInitialTextStyle(def.id);
       if (!textStyle) {
-        // Non-renderer element kinds (divider / image / file / link)
-        // don't yet have a canvas renderer — clicks fall through to a
-        // no-op until their dedicated components ship.
+        // Non-renderer element kinds (image / file / link) don't yet
+        // have a canvas renderer — clicks fall through to a no-op
+        // until their dedicated components ship.
         return;
       }
       setModules((prev) => {
@@ -495,7 +646,7 @@ export function ReportBuilderPage({
         return [...prev, buildTextElementModule(def, textStyle, 0, maxY)];
       });
     },
-    [buildTextElementModule, buildEmojiElementModule],
+    [buildTextElementModule, buildEmojiElementModule, buildDividerElementModule],
   );
 
   const handleDropElementAt = useCallback(
@@ -511,6 +662,14 @@ export function ReportBuilderPage({
         setDraggingElement(null);
         return;
       }
+      if (def.id === 'divider') {
+        setModules((prev) => [
+          ...prev,
+          buildDividerElementModule(def, clampedX, clampedY),
+        ]);
+        setDraggingElement(null);
+        return;
+      }
       const textStyle = elementKindToInitialTextStyle(def.id);
       if (!textStyle) {
         setDraggingElement(null);
@@ -522,7 +681,7 @@ export function ReportBuilderPage({
       ]);
       setDraggingElement(null);
     },
-    [buildTextElementModule, buildEmojiElementModule],
+    [buildTextElementModule, buildEmojiElementModule, buildDividerElementModule],
   );
 
   const handleDragStartElement = useCallback((def: ElementDefinition) => {
@@ -585,6 +744,7 @@ export function ReportBuilderPage({
         isEditMode={isEditMode}
         selectedIds={selectedProfileIds}
         onSelectedIdsChange={setSelectedProfileIds}
+        openTrigger={selectProfilesOpenTrigger}
       />
 
       {/* Main area — Figma "Panel position" frame (1139:172886).
@@ -679,11 +839,23 @@ export function ReportBuilderPage({
           )}
         </div>
 
-        {/* Canvas — floating card, fills remaining horizontal + stretches
-            vertically. The scroll container IS the card (overflow-y-auto
-            directly on the rounded/bordered wrapper) so the scrollbar
-            lives inside the card outline. */}
-        <div className="flex-1 min-w-0 overflow-y-auto bg-white border border-[#E8E8E9] rounded-[8px]">
+        {/* Canvas — fills remaining horizontal + stretches vertically.
+            The scroll container IS the card (overflow-y-auto directly
+            on the wrapper) so the scrollbar lives inside the card
+            outline when one is present.
+
+            Card chrome (`bg-white border border-[#E8E8E9] rounded-[8px]`)
+            paints only when `canvasMode === 'white'`.  In grey mode
+            the entire card chrome comes off so modules sit directly
+            on the page's `bg-[#F3F3F4]` parent.  The grid + drag /
+            drop / resize machinery is identical between modes;
+            removing the chrome only changes what's painted behind. */}
+        <div
+          className={cn(
+            'flex-1 min-w-0 overflow-y-auto',
+            canvasMode === 'white' && 'bg-white border border-[#E8E8E9] rounded-[8px]',
+          )}
+        >
           {/* `relative` here so the empty-board overlay can pin to
               this scroll viewport via `absolute inset-0`.
               Height rules:
@@ -700,12 +872,52 @@ export function ReportBuilderPage({
                   in edit mode (the existing behavior); `h-full` lets
                   the wrapper grow on tall viewports so the grid sits
                   in a fully-painted canvas. */}
+          {/* Global data-warning banner — Case 2 only.  Renders OUTSIDE
+              the modules-grid `p-6` wrapper because Figma 1857:73897
+              sits it with a 4 px inset from the canvas-card edge
+              (banner-x = card-x + 4, banner-y = card-y + 4), not the
+              24 px the modules grid uses.  Hidden when there's
+              nothing to warn about, the user dismissed this session,
+              or the canvas is in the empty state. */}
+          {modules.length > 0 &&
+            !bannerDismissed &&
+            affectedCase2Profiles.length > 0 && (
+              <div
+                className={cn(
+                  // White-card mode: the 4 px inset matches Figma
+                  // 1857:73897 — banner sits with a tight gap from
+                  // the canvas-card edge.  Grey mode: no card edge
+                  // to inset from, so the banner pins flush to the
+                  // canvas region.  The banner's own bg keeps it
+                  // visible against either parent.
+                  canvasMode === 'white' && 'px-[4px] pt-[4px]',
+                )}
+              >
+                <GlobalDataWarningBanner
+                  affectedCount={affectedCase2Profiles.length}
+                  onOpenSelectProfiles={() => {
+                    // The picker dropdown is edit-mode only — see the
+                    // ProfileSelectionBar effect that force-closes it
+                    // when !isEditMode.  Flip edit mode on first so
+                    // the trigger lands on a mounted dropdown.
+                    if (!isEditMode) setIsEditMode(true);
+                    setSelectProfilesOpenTrigger((n) => n + 1);
+                  }}
+                  onDismiss={() => setBannerDismissed(true)}
+                />
+              </div>
+            )}
           <div
-            className={
-              modules.length === 0
-                ? 'p-6 h-full relative'
-                : 'p-6 min-h-[900px] h-full relative'
-            }
+            className={cn(
+              'h-full relative',
+              modules.length === 0 ? '' : 'min-h-[900px]',
+              // White-card mode keeps the 24-px inset (the card's
+              // own "report surface" padding).  Grey mode strips it
+              // entirely so modules align with the page-level
+              // gap-2 / px-6 spacing on the flex parent rather than
+              // sitting in an awkward inner box of dead space.
+              canvasMode === 'white' && 'p-6',
+            )}
           >
             <div ref={canvasRef} className="w-full">
               <ReportCanvas

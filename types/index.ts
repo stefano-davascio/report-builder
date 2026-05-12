@@ -58,6 +58,7 @@ export interface LayoutItem {
   minW?: number;
   minH?: number;
   maxW?: number;
+  maxH?: number;
 }
 
 export interface ReportModule {
@@ -66,6 +67,20 @@ export interface ReportModule {
   chartType: ChartType;
   layout: LayoutItem;
   title?: string;
+  /**
+   * Network binding for the module.
+   *   • A specific `Platform` key (`'tiktok'`, `'facebook'`, …) means the
+   *     module was dragged from that network's tab in the Add-module
+   *     panel — it renders data for the matching profile(s) only, and
+   *     shows the "Select a matching profile to see data" empty state
+   *     when no selected profile lives on that network.
+   *   • `'cross-network'` means the module was dragged from the "All" tab
+   *     and aggregates across every profile whose platform is supported
+   *     by the underlying `ModuleDefinition`.
+   *
+   * Omitted = legacy module (treat as cross-network for back-compat).
+   */
+  network?: Platform | 'cross-network';
   // ─── Element extensions ─────────────────────────────────────────────
   // When `elementKind` is set, this entry is a non-data canvas element
   // (text/heading/etc.) rather than a data-bound module. The canvas
@@ -81,8 +96,11 @@ export interface ReportModule {
    *                 `EmojiElement`. The picked character is stored on
    *                 `emoji` below; an empty string means "newly dropped,
    *                 picker should auto-open".
+   *   • `'divider'` — horizontal-rule layout block, rendered by
+   *                 `DividerElement`.  No data, no editable content;
+   *                 just a hairline that paints across the cell.
    */
-  elementKind?: 'text' | 'emoji';
+  elementKind?: 'text' | 'emoji' | 'divider';
   /**
    * HTML content for text-based elements. Stored as HTML so inline
    * formatting (B / I / U / links) round-trips through the contenteditable

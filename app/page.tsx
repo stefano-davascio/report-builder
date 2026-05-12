@@ -275,6 +275,7 @@ export default function Home() {
         initialModules={active.modules}
         initialProfileIds={active.selectedProfileIds}
         sidebarMode={scenario.sidebarMode}
+        canvasMode={scenario.canvasMode}
         onBack={handleBack}
         onSave={(snapshot) => handleBuilderSave(active.id, snapshot)}
       />
@@ -292,6 +293,7 @@ export default function Home() {
         initialModules={draft.modules}
         initialProfileIds={draft.selectedProfileIds}
         sidebarMode={scenario.sidebarMode}
+        canvasMode={scenario.canvasMode}
         onBack={handleBack}
         onSave={(snapshot) => handleSaveDraft(draft, snapshot)}
       />
@@ -323,7 +325,18 @@ export default function Home() {
   return (
     <>
       {route}
-      <ScenarioSwitcher scenario={scenario} onChange={setScenario} />
+      <ScenarioSwitcher
+        scenario={scenario}
+        onChange={setScenario}
+        // Both 'builder' and 'builder-draft' map to the builder UI.
+        // Anything else (landing) gets the landing-page defaults
+        // open in the switcher.
+        currentPage={
+          view.kind === 'builder' || view.kind === 'builder-draft'
+            ? 'builder'
+            : 'landing'
+        }
+      />
     </>
   );
 }

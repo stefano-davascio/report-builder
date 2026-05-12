@@ -253,6 +253,89 @@ export function IconPlus({ className, size = 20, color = 'currentColor' }: IconP
   );
 }
 
+// Figma: activity (683:1361) — the pulse/heartbeat glyph used in the
+// module-card empty state ("Select a matching profile to see data",
+// Figma 1916:37022). Standard Lucide-shape activity icon — a flat line
+// from the right edge that drops into a heartbeat spike and flattens
+// out on the left.  Native viewBox is 24×24, with the path naturally
+// occupying ~20×18 in the center; Figma's 32-tile usage in 1916:37022
+// applies the same 12.5%/8.33% inset that our default centering math
+// produces, so no tileW/tileH overrides are needed.  Stroke matches
+// the rest of the library (1.5 px non-scaling).
+export function IconActivity({ className, size = 32, color = 'currentColor' }: IconProps) {
+  return (
+    <FigmaIcon size={size} color={color} nativeW={24} nativeH={24} tileW={24} tileH={24} tileX={0} tileY={0} className={className}>
+      <path d="M22 12h-4l-3 9L9 3l-3 9H2" {...S} />
+    </FigmaIcon>
+  );
+}
+
+// Figma: checkbox (Sendible design system).  Self-contained
+// component with three states baked into a single 24×24 viewBox so
+// the box outline + inner glyph stay perfectly aligned regardless
+// of size.  The paths come from the design-system export verbatim:
+//
+//   • box outline — 17×17 rounded square at (3.5, 3.5) → (20.5,
+//                   20.5) with ~3.5 px corner radius.  Filled
+//                   `#4D36FF` (brand-purple) when active; white
+//                   with a 1-px `rgba(32,30,36,0.2)` stroke at rest.
+//   • checked     — filled-path checkmark glyph rendered in white.
+//   • indeterminate — filled-path horizontal bar rendered in white.
+//
+// Lives outside the `FigmaIcon` wrapper because it isn't a simple
+// stroke-only path — it pairs an outline + inner glyph that the
+// 24-tile centering math doesn't apply to cleanly.
+interface IconCheckboxProps {
+  state: 'checked' | 'unchecked' | 'indeterminate';
+  className?: string;
+  size?: number;
+}
+export function IconCheckbox({ state, className, size = 24 }: IconCheckboxProps) {
+  const filled = state !== 'unchecked';
+  return (
+    <span
+      aria-hidden="true"
+      className={className}
+      style={{
+        display: 'inline-flex',
+        width: size,
+        height: size,
+        flexShrink: 0,
+      }}
+    >
+      <svg
+        width="100%"
+        height="100%"
+        viewBox="0 0 24 24"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M7 3.5H17C18.933 3.5 20.5 5.067 20.5 7V17C20.5 18.933 18.933 20.5 17 20.5H7C5.067 20.5 3.5 18.933 3.5 17V7C3.5 5.067 5.067 3.5 7 3.5Z"
+          fill={filled ? '#4D36FF' : '#FFFFFF'}
+          stroke={filled ? '#4D36FF' : 'rgba(32,30,36,0.2)'}
+        />
+        {state === 'checked' && (
+          <path
+            fillRule="evenodd"
+            clipRule="evenodd"
+            d="M15.2603 9.14519L10.2853 14.0867L8.33982 12.3212C8.14182 12.1417 7.83882 12.1492 7.65032 12.3377L7.64682 12.3412C7.44632 12.5417 7.45182 12.8682 7.65932 13.0612L9.58132 14.8467C9.97482 15.2122 10.5863 15.2017 10.9668 14.8232L15.9648 9.85469C16.1613 9.65969 16.1613 9.34219 15.9658 9.14619C15.7713 8.95169 15.4558 8.95119 15.2603 9.14519Z"
+            fill="white"
+          />
+        )}
+        {state === 'indeterminate' && (
+          <path
+            fillRule="evenodd"
+            clipRule="evenodd"
+            d="M14.4994 11.4999C14.7762 11.4995 15 11.7233 14.9993 11.9998C14.9997 12.2759 14.7762 12.4994 14.4994 12.4997L9.49992 12.4994C9.22345 12.5001 8.99965 12.2763 9 11.9994C8.99965 11.7233 9.22309 11.4999 9.49992 11.4995L14.4994 11.4999Z"
+            fill="white"
+          />
+        )}
+      </svg>
+    </span>
+  );
+}
+
 // Figma: plus_circle (1:35) — plus glyph inside an outlined circle. Used
 // as the "Select profiles" affordance in the report header.
 export function IconPlusCircle({ className, size = 20, color = 'currentColor' }: IconProps) {
@@ -282,9 +365,26 @@ export function IconModules({ className, size = 20, color = 'currentColor' }: Ic
 // at the bottom-right" — the data-source-add metaphor.  Brand-purple
 // `#4D36FF` is the default fill the design renders against the
 // active rail tint (#EDEAFF).
+//
+// `tileW={24} tileH={24}` scales the native 20×20 paths up to fill
+// the entire 24×24 design tile (Figma's icon container), matching
+// the size the rail design specs the glyph at.  Without the
+// override, FigmaIcon would centre the 20×20 native inside the 24
+// container, leaving 2 px of padding around the path bounds and
+// shrinking the on-screen icon by ~17 % relative to spec.
 export function IconStackPlus({ className, size = 20, color = 'currentColor' }: IconProps) {
   return (
-    <FigmaIcon size={size} color={color} nativeW={20} nativeH={20} className={className}>
+    <FigmaIcon
+      size={size}
+      color={color}
+      nativeW={20}
+      nativeH={20}
+      tileW={24}
+      tileH={24}
+      tileX={0}
+      tileY={0}
+      className={className}
+    >
       <path d="M2.5 10L10 14.375L17.5 10" {...S} strokeWidth={1.67} />
       <path d="M2.5 6.25L10 10.625L17.5 6.25L10 1.875L2.5 6.25Z" {...S} strokeWidth={1.67} />
       <path d="M14.375 15.625H18.125" {...S} strokeWidth={1.67} />
@@ -298,12 +398,24 @@ export function IconStackPlus({ className, size = 20, color = 'currentColor' }: 
 // split-sidebar architecture.  Filled-path icon (NOT stroked) at
 // native viewBox 20×20.  Reads as "document with a list cluster +
 // detail-cell" — a content-blocks metaphor that pairs with the
-// Text / Heading / Image elements the panel exposes.
+// Text / Heading / Image elements the panel exposes.  Same
+// `tileW/tileH=24` override as IconStackPlus so both rail glyphs
+// fill the same on-screen footprint.
 export function IconElements({ className, size = 20, color = 'currentColor' }: IconProps) {
   return (
-    <FigmaIcon size={size} color={color} nativeW={20} nativeH={20} className={className}>
+    <FigmaIcon
+      size={size}
+      color={color}
+      nativeW={20}
+      nativeH={20}
+      tileW={24}
+      tileH={24}
+      tileX={0}
+      tileY={0}
+      className={className}
+    >
       <path
-        d="M7.03543 16.5208H7.78543V15.0208H7.03543V15.7708V16.5208ZM7.55 12.3684L8.08033 11.8381L7.01967 10.7775L6.48934 11.3078L7.01967 11.8381L7.55 12.3684ZM14.1888 6.64639V7.39639H15.6888V6.64639H14.9388H14.1888ZM11.0546 12.0913C11.0546 12.5055 11.3904 12.8413 11.8046 12.8413C12.2188 12.8413 12.5546 12.5055 12.5546 12.0913H11.8046H11.0546ZM11.8046 11.4019V10.6519C11.3904 10.6519 11.0546 10.9877 11.0546 11.4019H11.8046ZM15.481 11.4019H16.231C16.231 10.9877 15.8952 10.6519 15.481 10.6519V11.4019ZM14.731 12.0913C14.731 12.5055 15.0668 12.8413 15.481 12.8413C15.8952 12.8413 16.231 12.5055 16.231 12.0913H15.481H14.731ZM12.9535 14.3284C12.5393 14.3284 12.2035 14.6642 12.2035 15.0784C12.2035 15.4926 12.5393 15.8284 12.9535 15.8284V15.0784V14.3284ZM14.3321 15.8284C14.7463 15.8284 15.0821 15.4926 15.0821 15.0784C15.0821 14.6642 14.7463 14.3284 14.3321 14.3284V15.0784V15.8284ZM14.3928 11.4019C14.3928 10.9877 14.057 10.6519 13.6428 10.6519C13.2286 10.6519 12.8928 10.9877 12.8928 11.4019H13.6428H14.3928ZM12.8928 15.0784C12.8928 15.4926 13.2286 15.8284 13.6428 15.8284C14.057 15.8284 14.3928 15.4926 14.3928 15.0784H13.6428H12.8928ZM3.08695 2.4375V3.1875H13.4573V2.4375V1.6875H3.08695V2.4375ZM13.4573 2.4375V3.1875C13.8613 3.1875 14.1888 3.515 14.1888 3.91898H14.9388H15.6888C15.6888 2.68657 14.6897 1.6875 13.4573 1.6875V2.4375ZM3.08695 15.7708V15.0208C2.68296 15.0208 2.35547 14.6933 2.35547 14.2894H1.60547H0.855469C0.855469 15.5218 1.85454 16.5208 3.08695 16.5208V15.7708ZM1.60547 14.2894H2.35547V3.91898H1.60547H0.855469V14.2894H1.60547ZM1.60547 3.91898H2.35547C2.35547 3.515 2.68296 3.1875 3.08695 3.1875V2.4375V1.6875C1.85454 1.6875 0.855469 2.68657 0.855469 3.91898H1.60547ZM6.79065 6.51157H6.04065C6.04065 6.71101 5.87898 6.87268 5.67954 6.87268V7.62268V8.37268C6.70741 8.37268 7.54065 7.53944 7.54065 6.51157H6.79065ZM5.67954 7.62268V6.87268C5.48011 6.87268 5.31843 6.71101 5.31843 6.51157H4.56843H3.81843C3.81843 7.53944 4.65168 8.37268 5.67954 8.37268V7.62268ZM4.56843 6.51157H5.31843C5.31843 6.31214 5.48011 6.15046 5.67954 6.15046V5.40046V4.65046C4.65168 4.65046 3.81843 5.48371 3.81843 6.51157H4.56843ZM5.67954 5.40046V6.15046C5.87898 6.15046 6.04065 6.31214 6.04065 6.51157H6.79065H7.54065C7.54065 5.48371 6.70741 4.65046 5.67954 4.65046V5.40046ZM7.03543 15.7708V15.0208H3.08695V15.7708V16.5208H7.03543V15.7708ZM7.01967 11.8381L6.48934 11.3078L2.55662 15.2405L3.08695 15.7708L3.61728 16.3012L7.55 12.3684L7.01967 11.8381ZM14.9388 3.91898H14.1888V6.64639H14.9388H15.6888V3.91898H14.9388ZM11.1428 9.0735V9.8235H16.1428V9.0735V8.3235H11.1428V9.0735ZM17.8095 10.7402H17.0595V15.7402H17.8095H18.5595V10.7402H17.8095ZM16.1428 17.4068V16.6568H11.1428V17.4068V18.1568H16.1428V17.4068ZM9.47613 15.7402H10.2261V10.7402H9.47613H8.72613V15.7402H9.47613ZM11.1428 17.4068V16.6568C10.6365 16.6568 10.2261 16.2464 10.2261 15.7402H9.47613H8.72613C8.72613 17.0749 9.80811 18.1568 11.1428 18.1568V17.4068ZM17.8095 15.7402H17.0595C17.0595 16.2464 16.6491 16.6568 16.1428 16.6568V17.4068V18.1568C17.4775 18.1568 18.5595 17.0749 18.5595 15.7402H17.8095ZM16.1428 9.0735V9.8235C16.6491 9.8235 17.0595 10.2339 17.0595 10.7402H17.8095H18.5595C18.5595 9.40548 17.4775 8.3235 16.1428 8.3235V9.0735ZM11.1428 9.0735V8.3235C9.80811 8.3235 8.72613 9.40548 8.72613 10.7402H9.47613H10.2261C10.2261 10.2339 10.6365 9.8235 11.1428 9.8235V9.0735ZM11.8046 12.0913H12.5546V11.4019H11.8046H11.0546V12.0913H11.8046ZM11.8046 11.4019V12.1519H15.481V11.4019V10.6519H11.8046V11.4019ZM15.481 11.4019H14.731V12.0913H15.481H16.231V11.4019H15.481ZM12.9535 15.0784V15.8284H14.3321V15.0784V14.3284H12.9535V15.0784ZM13.6428 11.4019H12.8928V15.0784H13.6428H14.3928V11.4019H13.6428Z"
+        d="M7.7449 17.015H8.4949V15.515H7.7449V16.265V17.015ZM8.25947 12.8626L8.7898 12.3323L7.72914 11.2716L7.19881 11.8019L7.72914 12.3323L8.25947 12.8626ZM14.8983 7.14053V7.89053H16.3983V7.14053H15.6483H14.8983ZM10.2689 11.651C10.2689 12.0652 10.6047 12.401 11.0189 12.401C11.4332 12.401 11.7689 12.0652 11.7689 11.651H11.0189H10.2689ZM11.0189 10.401V9.65097C10.6047 9.65097 10.2689 9.98676 10.2689 10.401H11.0189ZM17.6856 10.401H18.4356C18.4356 9.98676 18.0998 9.65097 17.6856 9.65097V10.401ZM16.9356 11.651C16.9356 12.0652 17.2714 12.401 17.6856 12.401C18.0998 12.401 18.4356 12.0652 18.4356 11.651H17.6856H16.9356ZM13.1023 16.3176C12.6881 16.3176 12.3523 16.6534 12.3523 17.0676C12.3523 17.4819 12.6881 17.8176 13.1023 17.8176V17.0676V16.3176ZM15.6023 17.8176C16.0165 17.8176 16.3523 17.4819 16.3523 17.0676C16.3523 16.6534 16.0165 16.3176 15.6023 16.3176V17.0676V17.8176ZM15.1023 10.401C15.1023 9.98676 14.7665 9.65097 14.3523 9.65097C13.9381 9.65097 13.6023 9.98676 13.6023 10.401H14.3523H15.1023ZM13.6023 17.0676C13.6023 17.4819 13.9381 17.8176 14.3523 17.8176C14.7665 17.8176 15.1023 17.4819 15.1023 17.0676H14.3523H13.6023ZM3.79642 2.93164V3.68164H14.1668V2.93164V2.18164H3.79642V2.93164ZM14.1668 2.93164V3.68164C14.5708 3.68164 14.8983 4.00914 14.8983 4.41312H15.6483H16.3983C16.3983 3.18071 15.3992 2.18164 14.1668 2.18164V2.93164ZM3.79642 16.265V15.515C3.39244 15.515 3.06494 15.1875 3.06494 14.7835H2.31494H1.56494C1.56494 16.0159 2.56401 17.015 3.79642 17.015V16.265ZM2.31494 14.7835H3.06494V4.41312H2.31494H1.56494V14.7835H2.31494ZM2.31494 4.41312H3.06494C3.06494 4.00914 3.39244 3.68164 3.79642 3.68164V2.93164V2.18164C2.56401 2.18164 1.56494 3.18071 1.56494 4.41312H2.31494ZM7.50013 7.00571H6.75013C6.75013 7.20515 6.58845 7.36683 6.38902 7.36683V8.11683V8.86683C7.41688 8.86683 8.25013 8.03358 8.25013 7.00571H7.50013ZM6.38902 8.11683V7.36683C6.18958 7.36683 6.0279 7.20515 6.0279 7.00571H5.2779H4.5279C4.5279 8.03358 5.36115 8.86683 6.38902 8.86683V8.11683ZM5.2779 7.00571H6.0279C6.0279 6.80628 6.18958 6.6446 6.38902 6.6446V5.8946V5.1446C5.36115 5.1446 4.5279 5.97785 4.5279 7.00571H5.2779ZM6.38902 5.8946V6.6446C6.58845 6.6446 6.75013 6.80628 6.75013 7.00571H7.50013H8.25013C8.25013 5.97785 7.41688 5.1446 6.38902 5.1446V5.8946ZM7.7449 16.265V15.515H3.79642V16.265V17.015H7.7449V16.265ZM7.72914 12.3323L7.19881 11.8019L3.26609 15.7346L3.79642 16.265L4.32675 16.7953L8.25947 12.8626L7.72914 12.3323ZM15.6483 4.41312H14.8983V7.14053H15.6483H16.3983V4.41312H15.6483ZM11.0189 11.651H11.7689V10.401H11.0189H10.2689V11.651H11.0189ZM11.0189 10.401V11.151H17.6856V10.401V9.65097H11.0189V10.401ZM17.6856 10.401H16.9356V11.651H17.6856H18.4356V10.401H17.6856ZM13.1023 17.0676V17.8176H15.6023V17.0676V16.3176H13.1023V17.0676ZM14.3523 10.401H13.6023V17.0676H14.3523H15.1023V10.401H14.3523Z"
         fill="var(--stroke-0, currentColor)"
       />
     </FigmaIcon>
@@ -536,6 +648,20 @@ export function IconCompose({ className, size = 19, color = 'currentColor' }: Ic
         d="M8.75 1.25H2.5C1.81 1.25 1.25 1.81 1.25 2.5V14.5C1.25 15.19 1.81 15.75 2.5 15.75H14.5C15.19 15.75 15.75 15.19 15.75 14.5V8.25M14.99 1.07L17.18 3.26C17.66 3.74 17.66 4.51 17.18 4.99L9.42 12.75L5.25 13.75L6.25 9.58L14.01 1.82C14.49 1.34 15.26 1.34 15.74 1.82L14.99 1.07Z"
         {...S}
       />
+    </FigmaIcon>
+  );
+}
+
+// Lucide "printer" — used in the report header's more-actions
+// dropdown alongside Share.  Standard Lucide path at 24×24 viewBox;
+// FigmaIcon's centering math handles the inset.  Stroke matches the
+// rest of the library (1.5 px non-scaling) so the glyph reads at the
+// same weight as Share's `IconExternalLink` neighbour in the
+// dropdown.
+export function IconPrinter({ className, size = 20, color = 'currentColor' }: IconProps) {
+  return (
+    <FigmaIcon size={size} color={color} nativeW={24} nativeH={24} tileW={24} tileH={24} tileX={0} tileY={0} className={className}>
+      <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z" {...S} />
     </FigmaIcon>
   );
 }

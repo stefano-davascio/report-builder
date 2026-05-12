@@ -2550,7 +2550,8 @@ export function TextElement({
           title="More actions"
           className={cn(
             'text-element-action absolute right-[8px] top-[7px] z-10',
-            'flex items-center justify-center w-7 h-7 p-[6px] rounded-[6px] transition-colors',
+            'flex items-center justify-center w-7 h-7 p-[6px] rounded-[6px]',
+            'border border-[#E8E8E9] transition-colors',
             overflowOpen ? 'bg-[#F3F3F4]' : 'bg-white hover:bg-[#F3F3F4]',
           )}
         >

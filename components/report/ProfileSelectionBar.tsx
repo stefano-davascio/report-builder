@@ -1,7 +1,8 @@
 'use client';
 
-import { Fragment, useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { Fragment, useState, useRef, useEffect, useLayoutEffect, useCallback, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { Tooltip as TooltipPrimitive } from '@base-ui/react/tooltip';
 import {
   IconClose,
   IconCalendar,
@@ -10,6 +11,8 @@ import {
   IconWarning,
   IconDanger,
   IconHourglass,
+  IconSearch,
+  IconCheckbox,
 } from '@/components/icons/SendiIcons';
 import { cn } from '@/lib/utils';
 import {
@@ -25,30 +28,91 @@ import { ProfileAvatarSquare } from './ProfileAvatarSquare';
 import { PlatformIcon } from './PlatformIcon';
 import { ProfileChip } from './ProfileChip';
 
-// ─── Figma asset URLs ─────────────────────────────────────────────────────────
-const IMG_SELECT_PROFILES_ICON  = 'http://localhost:3845/assets/897588cb30948d74ad070363601bec6e29ae593b.svg';
-const IMG_SEARCH_ICON           = 'http://localhost:3845/assets/97aebb7d65a8e6707ebce6ebab90e5f2a97b53aa.svg';
-// Checkbox assets (from Figma frame 1093-85941)
-const IMG_CHECKBOX_BG_ACTIVE    = 'http://localhost:3845/assets/271c6860ffbfe466d6906e4d591b0ba04ea6c6e2.svg';
-const IMG_CHECKBOX_CHECK        = 'http://localhost:3845/assets/c99fa007b16cb45666681730a1b342cff2bf317d.svg';
-const IMG_CHECKBOX_DASH         = 'http://localhost:3845/assets/36c01422bda49d4ec2b3a8e82e11e566a1400733.svg';
-const IMG_CHECKBOX_BG_UNCHECKED = 'http://localhost:3845/assets/e173eb50022d1aabfddb92bcd9b55ad9e4ec0da8.svg';
-
 // ─── Checkbox ─────────────────────────────────────────────────────────────────
+/**
+ * Thin wrapper around the library `IconCheckbox` so existing call
+ * sites keep their `<Checkbox state="..." />` API.  The icon component
+ * owns all the visual contract (24×24 box, brand-purple fill, white
+ * check / dash inner glyph) — this wrapper just preserves the
+ * `flex-shrink-0` layout guarantee its callers expect.
+ */
 function Checkbox({ state }: { state: 'checked' | 'unchecked' | 'indeterminate' }) {
-  const bgSrc   = state === 'unchecked' ? IMG_CHECKBOX_BG_UNCHECKED : IMG_CHECKBOX_BG_ACTIVE;
-  const iconSrc = state === 'checked' ? IMG_CHECKBOX_CHECK : state === 'indeterminate' ? IMG_CHECKBOX_DASH : null;
+  return <IconCheckbox state={state} className="flex-shrink-0" />;
+}
+
+// ─── Status tooltips ──────────────────────────────────────────────────────────
+/**
+ * Per-status hover tooltip surfaces — Figma 1824:76452 (permission) /
+ * 489:12798 (reconnect).  Two purposes:
+ *   1. Tell the user WHY the chip / overflow-chip is errored.
+ *   2. Hint the remediation ("Grant all permissions" / "Reconnect").
+ *
+ * Surfaces wherever a profile's `status` would otherwise read as a
+ * standalone red triangle without context — the OverflowChip trigger,
+ * its dropdown rows, and the per-profile chips on the bar.
+ */
+const STATUS_TOOLTIP_MESSAGE: Record<NonNullable<ProfileStatus>, string> = {
+  reconnect:  "We've lost connection to this profile. Reconnect it to restore access.",
+  permission: "We can't access this profile's data. Grant all permissions to fix this.",
+  // Hourglass copy isn't in the Figma yet; fall back to a sensible
+  // message until the design lands.
+  syncing:    "We're syncing this profile's data. This usually takes a few minutes.",
+};
+
+/**
+ * Hover-only tooltip wrapper using the Figma chrome from 1824:76452 /
+ * 489:12798:
+ *   • `bg-[rgba(32,30,36,0.7)]` translucent dark surface.
+ *   • `rounded-[4px] px-[8px] py-[4px]`.
+ *   • Label-Helper 12 typography (12 / 16 Regular #FFF, tracking 0.3).
+ *   • `max-w-[224px]` wraps long messages without breaking layout.
+ *
+ * Built on the base-ui primitive directly (rather than the project's
+ * shared `<TooltipContent>`) because the shared variant ships with
+ * an opaque arrow + foreground bg + rounded-md / px-3 / py-1.5 chrome
+ * — a different semantic from this status surface.  Keeping them
+ * separate prevents either from drifting visually as the other
+ * iterates.
+ *
+ * `render={<span />}` lets the trigger sit inside another button
+ * (the OverflowChip body click target) without nesting `<button>`s.
+ */
+function WarningTooltip({
+  children,
+  message,
+}: {
+  children: ReactNode;
+  message: string;
+}) {
   return (
-    <div className="relative size-[24px] flex-shrink-0">
-      <div className="absolute inset-[12.5%]">
-        <img alt="" className="absolute inset-0 block max-w-none w-full h-full" src={bgSrc} />
-      </div>
-      {iconSrc && (
-        <div className="absolute inset-[25%]">
-          <img alt="" className="absolute inset-0 block max-w-none w-full h-full" src={iconSrc} />
-        </div>
-      )}
-    </div>
+    <TooltipPrimitive.Root>
+      <TooltipPrimitive.Trigger render={<span className="inline-flex" />}>
+        {children}
+      </TooltipPrimitive.Trigger>
+      <TooltipPrimitive.Portal>
+        <TooltipPrimitive.Positioner side="top" sideOffset={6} className="isolate z-50">
+          <TooltipPrimitive.Popup
+            className={cn(
+              // Figma 489:12798 — backdrop-blur softens whatever's
+              // behind the tooltip so the dark-alpha surface reads
+              // as glass rather than flat ink.
+              'bg-[rgba(32,30,36,0.7)] backdrop-blur-[2px] rounded-[4px] px-[8px] py-[4px]',
+              'max-w-[224px]',
+              'text-[12px] leading-[16px] text-white',
+              'data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0',
+              'data-open:animate-in data-open:fade-in-0',
+              'data-closed:animate-out data-closed:fade-out-0',
+            )}
+            style={{
+              fontFamily: 'IBM Plex Sans, sans-serif',
+              letterSpacing: '0.3px',
+            }}
+          >
+            {message}
+          </TooltipPrimitive.Popup>
+        </TooltipPrimitive.Positioner>
+      </TooltipPrimitive.Portal>
+    </TooltipPrimitive.Root>
   );
 }
 
@@ -59,14 +123,19 @@ function Checkbox({ state }: { state: 'checked' | 'unchecked' | 'indeterminate' 
  *
  * Hard geometry specs from the design:
  *   • container — `flex items-center justify-end gap-[4px] p-[4px]
- *                 rounded-[4px]`.  Height is content-driven (no fixed
- *                 cap in Figma) — naturally settles at ~26 px (4 +
- *                 18-line-height label + 4).
- *   • icon slot — 14-px glyph, native asset stroke-width = 1 (no
- *                 attribute set on the path → SVG default).  Library
- *                 default 1.5 reads heavy at this size, so override
- *                 via `[&_path]:[stroke-width:1]`.
- *   • label     — IBM Plex Sans 12 / 18, regular weight.
+ *                 rounded-[4px] h-[20px] overflow-clip`.  Hard 20-px
+ *                 outer height — Figma's React export wraps the
+ *                 label in a `leading-[0]` parent + `<p leading-[18]>`
+ *                 to collapse the line box visually; we get the same
+ *                 result by locking outer h to 20 and running the
+ *                 text at `leading-[12px]` (cap-height-driven).
+ *   • icon slot — 14-px glyph, native asset stroke-width = 1.  The
+ *                 `overflow-clip` on the outer crops the 1-px
+ *                 overhang on top + bottom (icon centers in the 12-px
+ *                 inner content row).
+ *   • label     — IBM Plex Sans 12 / 12, Regular.  No letter-spacing
+ *                 (the Label-Helper 12 token's 0.3 px reads too loose
+ *                 at the 20-px outer height).
  *
  * Variant tokens:
  *   • Reconnect  — bg #FCE7E9 fg #CE091C icon `danger`    label "Reconnect profile"
@@ -83,15 +152,18 @@ function StatusBadge({ status }: { status: NonNullable<ProfileStatus> }) {
 
   return (
     <div
-      className="flex items-center justify-end gap-[4px] p-[4px] rounded-[4px] flex-shrink-0"
+      className="flex items-center justify-end gap-[4px] p-[4px] rounded-[4px] h-[20px] overflow-clip flex-shrink-0"
       style={{ backgroundColor: config.bg }}
     >
       <span className="flex items-center justify-center flex-shrink-0 [&_path]:[stroke-width:1]">
         <Icon size={14} color={config.color} />
       </span>
       <span
-        className="text-[12px] leading-[18px] whitespace-nowrap"
-        style={{ color: config.color, fontFamily: 'IBM Plex Sans, sans-serif' }}
+        className="text-[12px] leading-[12px] whitespace-nowrap"
+        style={{
+          color: config.color,
+          fontFamily: 'IBM Plex Sans, sans-serif',
+        }}
       >
         {config.label}
       </span>
@@ -229,21 +301,36 @@ function OverflowChip({
         >
           +{count}
         </span>
-        {hasError && (
-          <span
-            aria-hidden
-            className="flex items-center justify-center w-[24px] h-[24px] flex-shrink-0"
-          >
-            <IconWarning
-              size={14}
-              color="#CE091C"
-              // Native asset has no stroke-width attribute (defaults
-              // to 1).  Library default 1.5 reads heavy; 1 matches
-              // the Figma render exactly.
-              className="[&_path]:[stroke-width:1]"
-            />
-          </span>
-        )}
+        {hasError && (() => {
+          // Aggregate error: pick the first errored profile's status
+          // and use its tooltip message.  When the overflow set
+          // contains a mix (e.g. one permission + one reconnect), the
+          // tooltip shows the message for whichever appears first in
+          // `profiles`.  The dropdown rows expose the per-profile
+          // tooltips for the full picture.
+          const firstErrored = profiles.find(
+            (p) => p.status === 'permission' || p.status === 'reconnect',
+          );
+          const message = firstErrored?.status
+            ? STATUS_TOOLTIP_MESSAGE[firstErrored.status]
+            : '';
+          return (
+            <WarningTooltip message={message}>
+              <span
+                className="flex items-center justify-center w-[24px] h-[24px] flex-shrink-0"
+              >
+                <IconWarning
+                  size={14}
+                  color="#CE091C"
+                  // Native asset has no stroke-width attribute (defaults
+                  // to 1).  Library default 1.5 reads heavy; 1 matches
+                  // the Figma render exactly.
+                  className="[&_path]:[stroke-width:1]"
+                />
+              </span>
+            </WarningTooltip>
+          );
+        })()}
         {onClear && (
           <button
             type="button"
@@ -307,17 +394,18 @@ function OverflowChip({
                     {profile.name}
                   </span>
                 </div>
-                {rowError && (
-                  <span
-                    aria-hidden
-                    className="flex items-center justify-center w-[24px] h-[24px] flex-shrink-0"
-                  >
-                    <IconWarning
-                      size={14}
-                      color="#CE091C"
-                      className="[&_path]:[stroke-width:1]"
-                    />
-                  </span>
+                {rowError && profile.status && (
+                  <WarningTooltip message={STATUS_TOOLTIP_MESSAGE[profile.status]}>
+                    <span
+                      className="flex items-center justify-center w-[24px] h-[24px] flex-shrink-0"
+                    >
+                      <IconWarning
+                        size={14}
+                        color="#CE091C"
+                        className="[&_path]:[stroke-width:1]"
+                      />
+                    </span>
+                  </WarningTooltip>
                 )}
                 {onRemoveProfile && (
                   <button
@@ -383,11 +471,13 @@ function SelectProfilesDropdown({
           )}
         >
           <div className="flex items-center justify-center w-[32px] h-[32px] flex-shrink-0">
-            <img
-              src={IMG_SEARCH_ICON}
-              alt=""
-              style={{ width: 16, height: 16, display: 'block' }}
-            />
+            {/* Inline `IconSearch` from the SendiIcons library —
+                replaces an earlier `<img>` that pointed at the Figma
+                MCP localhost asset server (`http://localhost:3845/...`),
+                which only resolves while Figma desktop + MCP are
+                running.  Shipped builds had a broken-image
+                placeholder where the search glyph should be. */}
+            <IconSearch size={16} color="#201E24" />
           </div>
           <input
             type="text"
@@ -534,14 +624,37 @@ interface ProfileSelectionBarProps {
    */
   selectedIds: Set<string>;
   onSelectedIdsChange: (next: Set<string>) => void;
+  /**
+   * Imperative open trigger — when the numeric value changes (parent
+   * bumps it), this component force-opens the picker dropdown.  Used
+   * by `GlobalDataWarningBanner`'s "Fix in Select profiles" link so
+   * the user can act on the per-profile pills the moment the banner
+   * is clicked.  Numeric instead of boolean so successive triggers
+   * always fire even if the dropdown is already open / was closed
+   * by the user.
+   */
+  openTrigger?: number;
 }
 
 export function ProfileSelectionBar({
   isEditMode,
   selectedIds,
   onSelectedIdsChange,
+  openTrigger,
 }: ProfileSelectionBarProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  // External open trigger — parent bumps `openTrigger` to imperatively
+  // open the dropdown.  We skip the initial mount value (no auto-open
+  // on page load) by stashing the first-seen value in a ref; only
+  // subsequent changes flip the dropdown on.
+  const lastOpenTriggerRef = useRef<number | undefined>(openTrigger);
+  useEffect(() => {
+    if (openTrigger === undefined) return;
+    if (lastOpenTriggerRef.current === openTrigger) return;
+    lastOpenTriggerRef.current = openTrigger;
+    setDropdownOpen(true);
+  }, [openTrigger]);
   const [searchQuery, setSearchQuery]   = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 

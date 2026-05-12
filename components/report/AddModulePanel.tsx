@@ -46,8 +46,22 @@ import {
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
+/**
+ * Network binding chosen by the user when adding a module — derived from
+ * the active network filter tab. Mirrors `ReportModule.network`: a
+ * specific `Platform` key when the user is inside (say) the TikTok tab,
+ * `'cross-network'` when the "All" tab is selected. The same binding is
+ * threaded through both the click-to-add path and the drag dataTransfer
+ * payload so the canvas can stamp it onto the created `ReportModule`.
+ */
+export type ModuleNetworkBinding = Platform | 'cross-network';
+
+/** dataTransfer key used to carry the network binding alongside the
+ *  definition id when the user drags a module row onto the canvas. */
+export const MODULE_NETWORK_MIME = 'application/x-module-network';
+
 interface AddModulePanelProps {
-  onAdd: (definition: ModuleDefinition) => void;
+  onAdd: (definition: ModuleDefinition, network: ModuleNetworkBinding) => void;
   onClose: () => void;
   /**
    * Click-to-add for non-data canvas elements (Text, Heading 1, Heading 2,
@@ -61,7 +75,7 @@ interface AddModulePanelProps {
    * surface this to the canvas so the grid can render a drop placeholder
    * sized to this definition.
    */
-  onDragStartModule?: (definition: ModuleDefinition) => void;
+  onDragStartModule?: (definition: ModuleDefinition, network: ModuleNetworkBinding) => void;
   /** Called when the drag ends (dropped or cancelled). */
   onDragEndModule?: () => void;
   /** Mirrors onDragStartModule for the Elements tab. */
@@ -220,6 +234,7 @@ function PlatformBadge({ platform }: { platform: string }) {
 
 function ModuleListItem({
   def,
+  network,
   onAdd,
   onDragStartModule,
   onDragEndModule,
@@ -227,8 +242,14 @@ function ModuleListItem({
   compact = false,
 }: {
   def: ModuleDefinition;
-  onAdd: (def: ModuleDefinition) => void;
-  onDragStartModule?: (def: ModuleDefinition) => void;
+  /**
+   * Network binding to stamp on the module when this row is added/dropped.
+   * Reflects the panel's currently-active network filter: a specific
+   * `Platform` for per-network tabs, `'cross-network'` for the "All" tab.
+   */
+  network: ModuleNetworkBinding;
+  onAdd: (def: ModuleDefinition, network: ModuleNetworkBinding) => void;
+  onDragStartModule?: (def: ModuleDefinition, network: ModuleNetworkBinding) => void;
   onDragEndModule?: () => void;
   /**
    * When set, the right-rail platform cluster collapses to the single
@@ -257,7 +278,7 @@ function ModuleListItem({
       wasDragged.current = false;
       return;
     }
-    onAdd(def);
+    onAdd(def, network);
   };
 
   // `platformsToShow` is the list that actually renders in the right-rail
@@ -276,9 +297,15 @@ function ModuleListItem({
     // Required for Firefox — if dataTransfer is empty, the drag is cancelled
     // immediately. Also lets the drop target read back the id if needed.
     e.dataTransfer.setData('application/x-module-definition-id', def.id);
+    // Stamp the panel's currently-active network filter onto the drag so
+    // the canvas's drop handler can store it on the new ReportModule
+    // without needing a separate state subscription. `'cross-network'`
+    // means the user is on the "All" tab; any other value is a canonical
+    // Platform key.
+    e.dataTransfer.setData(MODULE_NETWORK_MIME, network);
     e.dataTransfer.effectAllowed = 'copy';
     wasDragged.current = true;
-    onDragStartModule?.(def);
+    onDragStartModule?.(def, network);
   };
 
   const handleDragEnd = () => {
@@ -832,6 +859,14 @@ export function AddModulePanel({
                   effectiveView === 'network' && !search
                     ? filterIdToPlatform(selectedNetwork)
                     : null;
+                // Network binding stamped on every module dragged/added
+                // from this view. Per-network tab → that platform key;
+                // anywhere else (All tab, search results, visual-type
+                // view) → `'cross-network'`. Search deliberately stays
+                // cross-network because results fan out across tracks
+                // and the user hasn't expressed a network preference.
+                const moduleNetwork: ModuleNetworkBinding =
+                  scopedPlatform ?? 'cross-network';
                 return Object.entries(groupedByCategory).map(([category, mods]) => (
                   <div key={category} className="mb-[12px] last:mb-0">
                     <p className="-ml-[1px] text-[14px] leading-[21px] font-normal text-[#79787B] pb-[8px]">
@@ -842,6 +877,7 @@ export function AddModulePanel({
                         <ModuleListItem
                           key={def.id}
                           def={def}
+                          network={moduleNetwork}
                           onAdd={onAdd}
                           onDragStartModule={onDragStartModule}
                           onDragEndModule={onDragEndModule}

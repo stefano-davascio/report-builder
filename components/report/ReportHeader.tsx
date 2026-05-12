@@ -7,8 +7,10 @@ import {
   IconEdit,
   IconMoreVertical,
   IconExternalLink,
+  IconPrinter,
 } from '@/components/icons/SendiIcons';
 import { cn } from '@/lib/utils';
+import { DropdownSurface, DropdownItem } from './ModuleActions';
 
 /**
  * Top header for the report-detail page. Two strict variants, sourced
@@ -48,10 +50,15 @@ interface ReportHeaderProps {
    *  page. Optional so the component still works in isolation. Only
    *  rendered in view mode (see Figma 1371:347757 vs 1373:370662). */
   onClose?: () => void;
-  /** Share affordance on the view-mode header. Optional — when omitted
-   *  the button still renders for visual parity with the design but is
-   *  a no-op. Wire this once the share surface lands. */
+  /** Share action — now lives inside the more-actions dropdown
+   *  (Figma decision: free the header rail of standalone Share so the
+   *  kebab carries the canonical surface).  Optional; no-op when
+   *  omitted. */
   onShare?: () => void;
+  /** Print action — also lives inside the more-actions dropdown.
+   *  Optional; falls back to `window.print()` when omitted so the
+   *  affordance still produces a useful result without parent wiring. */
+  onPrint?: () => void;
 }
 
 export function ReportHeader({
@@ -63,10 +70,31 @@ export function ReportHeader({
   onTitleChange,
   onClose,
   onShare,
+  onPrint,
 }: ReportHeaderProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(title);
   const inputRef = useRef<HTMLInputElement>(null);
+  // More-actions dropdown state.  `moreBtnRef` anchors the portaled
+  // DropdownSurface; the outside-click handler closes the menu when
+  // the user mousedowns anywhere that isn't the button or the
+  // surface itself (the surface carries `data-module-dropdown` /
+  // `data-text-overflow-menu` attrs that DropdownSurface uses as
+  // its "inside" markers).
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const moreBtnRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!moreMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (moreBtnRef.current && moreBtnRef.current.contains(target)) return;
+      if (target.closest('[data-module-dropdown="true"]')) return;
+      setMoreMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [moreMenuOpen]);
 
   useEffect(() => { setTitleDraft(title); }, [title]);
 
@@ -267,31 +295,47 @@ export function ReportHeader({
               <IconEdit size={16} color="white" />
               Edit report
             </button>
-            {/* Share — Figma 1371:348316. Secondary pill paired with the
-                primary Edit report. Same h-32 / rounded-40 / leading-icon
-                shape, but uses the muted bg `rgba(255,255,255,0.1)` and
-                the hairline `rgba(32,30,36,0.05)` border so it reads as
-                a quiet companion rather than a competing CTA. The glyph
-                is `external_link` (boxed frame + escaping arrow), not
-                the social share-fan — same icon used in the row action
-                menu's Share item. */}
+            {/* More-actions kebab — Figma 1371:348200.  The standalone
+                Share button + adjacent divider were folded into this
+                dropdown so the header rail stays focused on
+                "Edit report" as the single visible CTA in view mode.
+                Share + Print live inside the menu; future overflow
+                actions (Duplicate, Delete, Rename, etc.) join here. */}
             <button
-              onClick={onShare}
-              className="flex items-center gap-[6px] h-8 px-3 text-[14px] font-medium text-[#363439] bg-[rgba(255,255,255,0.1)] border border-[rgba(32,30,36,0.05)] rounded-[40px] hover:bg-[#F3F3F4] transition-colors"
-            >
-              <IconExternalLink size={16} color="#363439" />
-              Share
-            </button>
-            {/* Trailing affordances — Figma 1371:348199 (divider) +
-                1371:348200 (kebab). Both are view-mode-only; edit mode
-                drops them entirely. */}
-            <span className="w-px h-6 bg-[#E8E8E9]" aria-hidden="true" />
-            <button
+              ref={moreBtnRef}
               aria-label="More report actions"
+              aria-expanded={moreMenuOpen}
+              aria-haspopup="menu"
+              onClick={() => setMoreMenuOpen((v) => !v)}
               className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-[#F3F3F4] transition-colors text-[#4C4B4F]"
             >
               <IconMoreVertical size={20} color="#201E24" />
             </button>
+            {moreMenuOpen && (
+              <DropdownSurface anchorRef={moreBtnRef}>
+                <DropdownItem
+                  icon={<IconExternalLink size={20} />}
+                  label="Share"
+                  onClick={() => {
+                    setMoreMenuOpen(false);
+                    onShare?.();
+                  }}
+                />
+                <DropdownItem
+                  icon={<IconPrinter size={20} />}
+                  label="Print"
+                  onClick={() => {
+                    setMoreMenuOpen(false);
+                    // Fall back to a native print dialog when the
+                    // parent hasn't wired a custom handler — this
+                    // keeps the surface useful without forcing every
+                    // call site to pass an `onPrint`.
+                    if (onPrint) onPrint();
+                    else if (typeof window !== 'undefined') window.print();
+                  }}
+                />
+              </DropdownSurface>
+            )}
           </>
         )}
       </div>

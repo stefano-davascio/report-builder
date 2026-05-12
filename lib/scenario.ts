@@ -44,6 +44,20 @@ export type ReportListState = 'empty' | 'few' | 'many' | 'filtered';
  */
 export type SidebarMode = 'combined' | 'split';
 
+/** Report-builder canvas background.  Internal review tool only —
+ *  lets designers compare the two treatments without rebuilding:
+ *    • 'white' — current production: modules sit inside a large white
+ *                canvas card (`bg-white border rounded-[8px]`) with
+ *                its own 24 px inset padding.  Card chrome paints the
+ *                "report surface" feel.
+ *    • 'grey'  — no white card.  Modules sit directly on the page's
+ *                `bg-[#F3F3F4]` and align with the page layout.  The
+ *                canvas card chrome + inset padding both come out so
+ *                the modules use the freed space naturally.
+ *  Default `'white'` so first-visit users see the shipping shape.
+ */
+export type CanvasMode = 'white' | 'grey';
+
 /** Independent UI capability flags.  Each one gates a surface that's
  *  built but not yet ready to ship — toggling exposes it for review
  *  without removing any code. Default OFF (production scope) on first
@@ -67,6 +81,9 @@ export interface Scenario {
    *  users see the shipping shape; designers flip to 'split' to
    *  preview the new IA. */
   sidebarMode: SidebarMode;
+  /** Report-builder canvas treatment — white card vs grey background.
+   *  See `CanvasMode` for details.  Defaults to 'white'. */
+  canvasMode: CanvasMode;
 }
 
 const DEFAULT_SCENARIO: Scenario = {
@@ -77,6 +94,7 @@ const DEFAULT_SCENARIO: Scenario = {
     sorting: false,
   },
   sidebarMode: 'combined',
+  canvasMode: 'white',
 };
 
 const STORAGE_KEY = 'report-builder.scenario.v1';
@@ -121,7 +139,11 @@ function readPersisted(): Scenario {
       parsed.sidebarMode === 'split' || parsed.sidebarMode === 'combined'
         ? parsed.sidebarMode
         : DEFAULT_SCENARIO.sidebarMode;
-    return { templateScope, reportListState, features, sidebarMode };
+    const canvasMode: CanvasMode =
+      parsed.canvasMode === 'white' || parsed.canvasMode === 'grey'
+        ? parsed.canvasMode
+        : DEFAULT_SCENARIO.canvasMode;
+    return { templateScope, reportListState, features, sidebarMode, canvasMode };
   } catch {
     return DEFAULT_SCENARIO;
   }
@@ -150,7 +172,8 @@ export function useScenario(): [Scenario, (next: Scenario) => void] {
       persisted.reportListState !== DEFAULT_SCENARIO.reportListState ||
       persisted.features.rename !== DEFAULT_SCENARIO.features.rename ||
       persisted.features.sorting !== DEFAULT_SCENARIO.features.sorting ||
-      persisted.sidebarMode !== DEFAULT_SCENARIO.sidebarMode;
+      persisted.sidebarMode !== DEFAULT_SCENARIO.sidebarMode ||
+      persisted.canvasMode !== DEFAULT_SCENARIO.canvasMode;
     if (differs) {
       setScenarioState(persisted);
     }

@@ -315,7 +315,7 @@ function CompactActions({
 // the anchor's bounding box so the menu's RIGHT edge lines up with the
 // anchor's right edge (matches Figma where the trigger sits at the far
 // right of the header row).
-function DropdownSurface({
+export function DropdownSurface({
   anchorRef,
   children,
 }: {
@@ -361,7 +361,7 @@ function DropdownSurface({
   );
 }
 
-function DropdownItem({
+export function DropdownItem({
   icon,
   label,
   active,

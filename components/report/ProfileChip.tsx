@@ -28,45 +28,65 @@
  */
 
 import { MockProfile, ProfileStatus } from '@/lib/profile-data';
-import { IconClose } from '@/components/icons/SendiIcons';
+import {
+  IconClose,
+  IconDanger,
+  IconWarning,
+  IconHourglass,
+} from '@/components/icons/SendiIcons';
 import { ProfileAvatarSquare } from './ProfileAvatarSquare';
+import { Tooltip as TooltipPrimitive } from '@base-ui/react/tooltip';
+import { cn } from '@/lib/utils';
 
-// Status-icon assets from the Figma MCP export. Kept module-local because
-// these specific asset IDs are unique to the chip node — the general
-// StatusBadge (used in the picker dropdown) uses a different set.
-const IMG_DANGER    = 'http://localhost:3845/assets/72cbcce5fb7e3a9388f3d5578b3fce8bcde03f13.svg';
-const IMG_WARNING   = 'http://localhost:3845/assets/d29bfd5e5194fc2e67c503851047c68afe530eee.svg';
-const IMG_HOURGLASS = 'http://localhost:3845/assets/4e0d6ac659f9a732ef17e70250b2d25bc0cd2915.svg';
-
-// Status → visual tokens. Nulls map to the healthy baseline. Kept as a
-// lookup (not a switch) so the chip body stays flat and the resting
-// (healthy) path is just an index into this table with a null key.
+// Status → visual tokens.  Nulls map to the healthy baseline.  Kept
+// as a lookup (not a switch) so the chip body stays flat and the
+// resting (healthy) path is just an index into this table with a
+// null key.
+//
+// `Icon` is a SendiIcons component (not an asset URL) so the glyph
+// always renders — the previous version pulled SVGs from
+// `http://localhost:3845/assets/...` (the Figma MCP localhost
+// server), which only resolves while Figma desktop + MCP are
+// running.  Shipped builds saw broken-image placeholders.
+type StatusIcon = typeof IconDanger | typeof IconWarning | typeof IconHourglass;
 const STATUS_STYLES: Record<
   NonNullable<ProfileStatus>,
-  { bg: string; border: string; icon: string; label: string }
+  { bg: string; border: string; Icon: StatusIcon; iconColor: string; label: string }
 > = {
   reconnect:  {
-    bg:     'rgba(229,10,31,0.05)',
-    border: '#FACED2',
-    icon:   IMG_DANGER,
-    label:  'Profile reconnection needed',
+    bg:        'rgba(229,10,31,0.05)',
+    border:    '#FACED2',
+    Icon:      IconDanger,
+    iconColor: '#CE091C',
+    label:     'Profile reconnection needed',
   },
   permission: {
-    bg:     'rgba(229,10,31,0.05)',
-    border: '#FACED2',
-    icon:   IMG_WARNING,
-    label:  'Permission needed',
+    bg:        'rgba(229,10,31,0.05)',
+    border:    '#FACED2',
+    Icon:      IconWarning,
+    iconColor: '#CE091C',
+    label:     'Permission needed',
   },
   syncing:    {
-    bg:     'rgba(255,193,7,0.1)',
-    border: '#FFF3CD',
-    icon:   IMG_HOURGLASS,
-    label:  'Syncing data',
+    bg:        'rgba(255,193,7,0.1)',
+    border:    '#FFF3CD',
+    Icon:      IconHourglass,
+    iconColor: '#806104',
+    label:     'Syncing data',
   },
 };
 
 const HEALTHY_BG = '#F3F3F4';
 const HEALTHY_BORDER = '#F3F3F4';
+
+// Hover tooltip copy per status — Figma 1824:76452 (permission) /
+// 489:12798 (reconnect).  Surfaces below the chip's status glyph so a
+// reviewer knows the cause + remediation without leaving the bar.
+const STATUS_TOOLTIP_MESSAGE: Record<NonNullable<ProfileStatus>, string> = {
+  reconnect:  "We've lost connection to this profile. Reconnect it to restore access.",
+  permission: "We can't access this profile's data. Grant all permissions to fix this.",
+  syncing:    "We're syncing this profile's data. This usually takes a few minutes.",
+};
 
 interface ProfileChipProps {
   profile: MockProfile;
@@ -123,15 +143,57 @@ export function ProfileChip({ profile, isEditing, onRemove }: ProfileChipProps) 
           Rendered in BOTH view and edit modes when status != healthy
           (spec §7: "Status icon appears ONLY when status ≠ healthy").
           The wrapper has no background of its own; the chip's tinted
-          background carries the semantic color. */}
-      {styles && (
-        <div
-          className="flex items-center justify-center w-[24px] h-[24px] rounded-[60px] flex-shrink-0"
-          aria-label={styles.label}
-          role="img"
-        >
-          <img src={styles.icon} alt="" className="w-[14px] h-[14px] block" />
-        </div>
+          background carries the semantic color.
+          Hover surfaces a Figma-spec'd tooltip (1824:76452 /
+          489:12798) explaining the cause + remediation; rendered as a
+          span via base-ui's `render` prop so we don't nest <button>
+          inside another interactive ancestor. */}
+      {styles && status && (
+        <TooltipPrimitive.Root>
+          <TooltipPrimitive.Trigger
+            render={
+              <span
+                aria-label={styles.label}
+                role="img"
+                className="flex items-center justify-center w-[24px] h-[24px] rounded-[60px] flex-shrink-0 [&_path]:[stroke-width:1]"
+              />
+            }
+          >
+            {/* SendiIcons component instead of an `<img>` so the
+                glyph always loads (the previous `<img src>` pointed
+                at the Figma MCP localhost server which only resolves
+                while Figma desktop + MCP are running).  Aliased
+                via a const because JSX treats lowercase identifiers
+                as HTML tags. */}
+            {(() => {
+              const StatusGlyph = styles.Icon;
+              return <StatusGlyph size={14} color={styles.iconColor} />;
+            })()}
+          </TooltipPrimitive.Trigger>
+          <TooltipPrimitive.Portal>
+            <TooltipPrimitive.Positioner side="top" sideOffset={6} className="isolate z-50">
+              <TooltipPrimitive.Popup
+                className={cn(
+                  // Figma 489:12798 — backdrop-blur softens whatever's
+                  // behind the tooltip so the dark-alpha surface reads
+                  // as glass rather than flat ink.
+                  'bg-[rgba(32,30,36,0.7)] backdrop-blur-[2px] rounded-[4px] px-[8px] py-[4px]',
+                  'max-w-[224px]',
+                  'text-[12px] leading-[16px] text-white',
+                  'data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0',
+                  'data-open:animate-in data-open:fade-in-0',
+                  'data-closed:animate-out data-closed:fade-out-0',
+                )}
+                style={{
+                  fontFamily: 'IBM Plex Sans, sans-serif',
+                  letterSpacing: '0.3px',
+                }}
+              >
+                {STATUS_TOOLTIP_MESSAGE[status]}
+              </TooltipPrimitive.Popup>
+            </TooltipPrimitive.Positioner>
+          </TooltipPrimitive.Portal>
+        </TooltipPrimitive.Root>
       )}
 
       {/* Remove × — edit mode ONLY (spec §7 + §9). 24×24 `rounded-[4px]`

@@ -92,14 +92,19 @@ export const ELEMENT_DEFINITIONS: ElementDefinition[] = [
     minW: 1,
     minH: 30,
   },
+  // Divider — visual chrome is JUST a 1-px hairline inside 12 px py
+  // padding, so the painted area is `12 + 1 + 12 = 25 px`.  Pick the
+  // smallest `defaultH` that yields at least 25 px visible after the
+  // 16-px BOTTOM_GAP_PX is subtracted: `21 × 2 − 16 = 26 px` (1 px of
+  // headroom).  Anything taller leaves dead space below the rule.
   {
     id: 'divider',
     name: 'Divider',
     category: 'Basic blocks',
     defaultW: 4,
-    defaultH: 30,
+    defaultH: 21,
     minW: 1,
-    minH: 30,
+    minH: 21,
   },
   {
     id: 'emoji',

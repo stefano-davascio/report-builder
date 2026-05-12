@@ -10,6 +10,7 @@ import { uid } from '@/lib/utils';
 import { ModuleCard } from './ModuleCard';
 import { TextElement } from './TextElement';
 import { EmojiElement } from './EmojiElement';
+import { DividerElement } from './DividerElement';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
@@ -1030,6 +1031,18 @@ export function ReportCanvas({
                   module={module}
                   isEditMode={isEditMode}
                   onChange={(patch) => handleEmojiElementChange(module.id, patch)}
+                  onDuplicate={() => handleDuplicate(module.id)}
+                  onDelete={() => handleDelete(module.id)}
+                />
+              </div>
+            );
+          }
+          if (module.elementKind === 'divider') {
+            return (
+              <div key={module.id}>
+                <DividerElement
+                  module={module}
+                  isEditMode={isEditMode}
                   onDuplicate={() => handleDuplicate(module.id)}
                   onDelete={() => handleDelete(module.id)}
                 />
