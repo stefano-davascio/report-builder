@@ -84,6 +84,15 @@ export interface Scenario {
   /** Report-builder canvas treatment — white card vs grey background.
    *  See `CanvasMode` for details.  Defaults to 'white'. */
   canvasMode: CanvasMode;
+  /** Master toggle for every profile-driven error / warning surface
+   *  in the report builder (global Action-required banner, per-module
+   *  warning icons + tooltips, per-profile status pills in the
+   *  picker, etc.).  Defaults to `false` so first-visit / production-
+   *  parity views show the calm state; flip on to demo the warning
+   *  system end-to-end.  Implemented by zeroing each
+   *  `MockProfile.status` to `null` at consumer sites when off —
+   *  the underlying mock data is untouched. */
+  showErrorStates: boolean;
 }
 
 const DEFAULT_SCENARIO: Scenario = {
@@ -95,6 +104,7 @@ const DEFAULT_SCENARIO: Scenario = {
   },
   sidebarMode: 'combined',
   canvasMode: 'white',
+  showErrorStates: false,
 };
 
 const STORAGE_KEY = 'report-builder.scenario.v1';
@@ -143,7 +153,8 @@ function readPersisted(): Scenario {
       parsed.canvasMode === 'white' || parsed.canvasMode === 'grey'
         ? parsed.canvasMode
         : DEFAULT_SCENARIO.canvasMode;
-    return { templateScope, reportListState, features, sidebarMode, canvasMode };
+    const showErrorStates: boolean = parsed.showErrorStates === true;
+    return { templateScope, reportListState, features, sidebarMode, canvasMode, showErrorStates };
   } catch {
     return DEFAULT_SCENARIO;
   }
@@ -173,7 +184,8 @@ export function useScenario(): [Scenario, (next: Scenario) => void] {
       persisted.features.rename !== DEFAULT_SCENARIO.features.rename ||
       persisted.features.sorting !== DEFAULT_SCENARIO.features.sorting ||
       persisted.sidebarMode !== DEFAULT_SCENARIO.sidebarMode ||
-      persisted.canvasMode !== DEFAULT_SCENARIO.canvasMode;
+      persisted.canvasMode !== DEFAULT_SCENARIO.canvasMode ||
+      persisted.showErrorStates !== DEFAULT_SCENARIO.showErrorStates;
     if (differs) {
       setScenarioState(persisted);
     }

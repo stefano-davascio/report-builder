@@ -276,6 +276,7 @@ export default function Home() {
         initialProfileIds={active.selectedProfileIds}
         sidebarMode={scenario.sidebarMode}
         canvasMode={scenario.canvasMode}
+        showErrorStates={scenario.showErrorStates}
         onBack={handleBack}
         onSave={(snapshot) => handleBuilderSave(active.id, snapshot)}
       />
@@ -294,6 +295,7 @@ export default function Home() {
         initialProfileIds={draft.selectedProfileIds}
         sidebarMode={scenario.sidebarMode}
         canvasMode={scenario.canvasMode}
+        showErrorStates={scenario.showErrorStates}
         onBack={handleBack}
         onSave={(snapshot) => handleSaveDraft(draft, snapshot)}
       />

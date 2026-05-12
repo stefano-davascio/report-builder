@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useState, useRef, useEffect, useLayoutEffect, useCallback, type ReactNode } from 'react';
+import { Fragment, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Tooltip as TooltipPrimitive } from '@base-ui/react/tooltip';
 import {
@@ -23,6 +23,7 @@ import {
   PROFILE_GROUPS,
   ALL_PROFILES,
 } from '@/lib/profile-data';
+import { maskProfileStatuses } from '@/lib/profile-status';
 import { ProfileAvatar } from './ProfileAvatar';
 import { ProfileAvatarSquare } from './ProfileAvatarSquare';
 import { PlatformIcon } from './PlatformIcon';
@@ -634,6 +635,12 @@ interface ProfileSelectionBarProps {
    * by the user.
    */
   openTrigger?: number;
+  /** Master toggle for profile-driven warning surfaces (per the
+   *  Scenario Switcher's "Show error states").  When `false`
+   *  (default), every profile's `status` is masked to `null` so
+   *  status pills, warning icons, and overflow-chip error chrome
+   *  all render as healthy.  The underlying mock data is unchanged. */
+  showErrorStates?: boolean;
 }
 
 export function ProfileSelectionBar({
@@ -641,6 +648,7 @@ export function ProfileSelectionBar({
   selectedIds,
   onSelectedIdsChange,
   openTrigger,
+  showErrorStates = false,
 }: ProfileSelectionBarProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
@@ -680,7 +688,26 @@ export function ProfileSelectionBar({
     }
   }, [isEditMode, dropdownOpen]);
 
-  const selectedProfiles = ALL_PROFILES.filter(p => selectedIds.has(p.id));
+  // Apply the master "Show error states" gate at the data layer — once
+  // here, all the downstream reads (chip row, overflow chip, picker)
+  // get healthy statuses without each having to know about the
+  // scenario flag.  `useMemo` so the picker dropdown's `groups` prop
+  // doesn't get a new reference every render when the flag is on.
+  const allProfiles = useMemo(
+    () => maskProfileStatuses(ALL_PROFILES, showErrorStates),
+    [showErrorStates],
+  );
+  const profileGroups = useMemo<ProfileGroup[]>(
+    () =>
+      showErrorStates
+        ? PROFILE_GROUPS
+        : PROFILE_GROUPS.map((g) => ({
+            ...g,
+            profiles: maskProfileStatuses(g.profiles, false),
+          })),
+    [showErrorStates],
+  );
+  const selectedProfiles = allProfiles.filter(p => selectedIds.has(p.id));
   // Chips we *might* render before overflow — capped at MAX_VISIBLE_CHIPS.
   // The measurement pass below narrows this further if the row is too
   // narrow to hold them all alongside "Clear all".
@@ -809,7 +836,7 @@ export function ProfileSelectionBar({
 
           {dropdownOpen && (
             <SelectProfilesDropdown
-              groups={PROFILE_GROUPS}
+              groups={profileGroups}
               selectedIds={selectedIds}
               onToggleProfile={toggleProfile}
               onToggleGroup={toggleGroup}

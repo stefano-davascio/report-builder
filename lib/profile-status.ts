@@ -23,6 +23,26 @@ import type { ModuleDefinition, Platform, ReportModule } from '@/types';
 export type WarningSeverity = 'case1' | 'case2' | null;
 
 /**
+ * Mask the `status` field on every profile when the scenario-level
+ * "Show error states" toggle is off — the calm-state default.
+ *
+ * Implemented by returning shallow copies with `status: null` so all
+ * downstream consumers (banner, module icons, status pills) read
+ * "healthy" without any of them having to learn about the toggle.
+ * The underlying mock data is never mutated.
+ *
+ * Identity-preserving when `show === true` (returns the same array
+ * reference) so memoization in consumer hooks stays stable.
+ */
+export function maskProfileStatuses(
+  profiles: MockProfile[],
+  show: boolean,
+): MockProfile[] {
+  if (show) return profiles;
+  return profiles.map((p) => (p.status === null ? p : { ...p, status: null }));
+}
+
+/**
  * Classify a single `ProfileStatus` into the warning tier.
  *
  *   • `'reconnect' | 'permission'` → `'case2'` (actionable — user must

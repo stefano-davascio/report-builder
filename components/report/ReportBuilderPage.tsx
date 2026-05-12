@@ -11,7 +11,7 @@ import { ReportCanvas } from './ReportCanvas';
 import { EmptyBoardCard } from './EmptyBoardCard';
 import { AddModulePanel } from './AddModulePanel';
 import { GlobalDataWarningBanner } from './GlobalDataWarningBanner';
-import { deriveGlobalCase2Profiles } from '@/lib/profile-status';
+import { deriveGlobalCase2Profiles, maskProfileStatuses } from '@/lib/profile-status';
 import { MODULE_DEFINITIONS } from '@/lib/mock-data';
 
 // Charts in lib/mock-data.ts declare `defaultH` in OLD-units (multiples
@@ -244,6 +244,12 @@ interface ReportBuilderPageProps {
    *  directly on the page's `#F3F3F4` background.  Defaults to
    *  `'white'` for production parity. */
   canvasMode?: CanvasMode;
+  /** Master toggle for the warning system — when `false` (default),
+   *  every profile's `status` is masked to `null` at the consumer
+   *  layer so the global banner / per-module icons / status pills
+   *  all read healthy.  Flipped on by the Scenario Switcher to demo
+   *  the warning system end-to-end. */
+  showErrorStates?: boolean;
 }
 
 export function ReportBuilderPage({
@@ -254,6 +260,7 @@ export function ReportBuilderPage({
   onSave: onSaveProp,
   sidebarMode = 'combined',
   canvasMode = 'white',
+  showErrorStates = false,
 }: ReportBuilderPageProps = {}) {
   // Normalize divider modules at construction time.  Earlier dividers
   // shipped with `h: 30` (the old default) which left ~35 px of dead
@@ -334,8 +341,8 @@ export function ReportBuilderPage({
     () => new Set(initialProfileIds ?? INITIAL_SELECTED_IDS),
   );
   const selectedProfiles = useMemo(
-    () => profilesByIds(selectedProfileIds),
-    [selectedProfileIds],
+    () => maskProfileStatuses(profilesByIds(selectedProfileIds), showErrorStates),
+    [selectedProfileIds, showErrorStates],
   );
   // Tracks the ModuleDefinition the user is currently dragging from the
   // Add-modules panel. While set, ReportCanvas enables its drop target and
@@ -745,6 +752,7 @@ export function ReportBuilderPage({
         selectedIds={selectedProfileIds}
         onSelectedIdsChange={setSelectedProfileIds}
         openTrigger={selectProfilesOpenTrigger}
+        showErrorStates={showErrorStates}
       />
 
       {/* Main area — Figma "Panel position" frame (1139:172886).

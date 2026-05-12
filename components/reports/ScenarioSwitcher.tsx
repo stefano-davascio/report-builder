@@ -96,6 +96,17 @@ const CANVAS_MODES: Option<CanvasMode>[] = [
   { id: 'grey',  label: 'Grey background', description: 'Modules on the page background', hint: 'card removed; modules sit on the page grey directly' },
 ];
 
+// Error-state master toggle.  Off by default so reviewers see the
+// calm-state production view; flipping on reveals every profile-
+// driven warning surface (global banner + per-module icons +
+// per-profile status pills) end-to-end.
+const ERROR_STATE_TOGGLE: Option<'showErrorStates'> = {
+  id: 'showErrorStates',
+  label: 'Show error states',
+  description: 'Profile warnings, banners, and partial-data states',
+  hint: 'reveal the full warning system: global banner, per-module icons, and per-profile status pills',
+};
+
 export function ScenarioSwitcher({
   scenario,
   onChange,
@@ -140,6 +151,10 @@ export function ScenarioSwitcher({
     onChange({ ...scenario, canvasMode: next });
   };
 
+  const handleErrorStatesToggle = () => {
+    onChange({ ...scenario, showErrorStates: !scenario.showErrorStates });
+  };
+
   return createPortal(
     <div
       // Full-viewport overlay — neither participates in page layout
@@ -160,6 +175,7 @@ export function ScenarioSwitcher({
           onFeatureToggle={handleFeatureToggle}
           onSidebarMode={handleSidebarMode}
           onCanvasMode={handleCanvasMode}
+          onErrorStatesToggle={handleErrorStatesToggle}
           currentPage={currentPage}
           onCollapse={() => setOpen(false)}
         />
@@ -215,6 +231,7 @@ interface ExpandedPanelProps {
   onFeatureToggle: (key: keyof ScenarioFeatures) => void;
   onSidebarMode: (next: SidebarMode) => void;
   onCanvasMode: (next: CanvasMode) => void;
+  onErrorStatesToggle: () => void;
   currentPage: ScenarioCurrentPage;
   onCollapse: () => void;
 }
@@ -226,6 +243,7 @@ function ExpandedPanel({
   onFeatureToggle,
   onSidebarMode,
   onCanvasMode,
+  onErrorStatesToggle,
   currentPage,
   onCollapse,
 }: ExpandedPanelProps) {
@@ -485,6 +503,22 @@ function ExpandedPanel({
                 name="canvas-mode"
               />
             ))}
+          </SubGroup>
+
+          {/* Error states — single master toggle that gates every
+              profile-driven warning surface (global banner,
+              per-module icons, per-profile status pills).  Off by
+              default so the calm production state is the first
+              thing reviewers see. */}
+          <SubGroup title="Error states">
+            <OptionRow
+              kind="checkbox"
+              checked={scenario.showErrorStates}
+              label={ERROR_STATE_TOGGLE.label}
+              description={ERROR_STATE_TOGGLE.description}
+              hint={ERROR_STATE_TOGGLE.hint}
+              onChange={onErrorStatesToggle}
+            />
           </SubGroup>
         </Group>
       </div>
