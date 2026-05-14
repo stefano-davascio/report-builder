@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 //     more-options kebab) so all three feel consistent under the
 //     hover state.
 //
-// Visual: a 1-px `#E8E8E9` rule that spans the cell's full width, vertically
+// Visual: a 1-px `#D2D2D3` rule that spans the cell's full width, vertically
 // centered.  Padding 12 px top + bottom keeps the rule away from cell
 // borders so adjacent elements don't visually butt against it.  Edit-mode
 // hover paints the same brand-purple chrome ring used by Text / Emoji
@@ -165,17 +165,17 @@ export function DividerElement({
         />
       )}
 
-      {/* Rule — the divider itself.  1-px hairline `#E8E8E9` (DARK/
-          dark--tint_90) full-width, vertically centered inside the
-          12-px top/bottom padding.  Same neutral the row borders in
-          the reports table use, so dividers feel native to the rest
-          of the surface. */}
+      {/* Rule — the divider itself.  1-px hairline `#D2D2D3` (DARK/
+          dark--tint_80) full-width, vertically centered inside the
+          12-px top/bottom padding.  A shade darker than the row
+          borders so the rule reads cleanly as a content separator
+          on the canvas surface. */}
       <div
         className="flex items-center w-full h-full px-[12px] py-[12px]"
         aria-label="Divider"
         role="separator"
       >
-        <div className="w-full h-px bg-[#E8E8E9]" />
+        <div className="w-full h-px bg-[#D2D2D3]" />
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   IconClose,
+  IconCloseCircle,
   IconPencil,
   IconEdit,
   IconMoreVertical,
@@ -10,7 +11,7 @@ import {
   IconPrinter,
 } from '@/components/icons/SendiIcons';
 import { cn } from '@/lib/utils';
-import { DropdownSurface, DropdownItem } from './ModuleActions';
+import { DropdownSurface, DropdownItem, DropdownSeparator } from './ModuleActions';
 
 /**
  * Top header for the report-detail page. Two strict variants, sourced
@@ -332,6 +333,23 @@ export function ReportHeader({
                     // call site to pass an `onPrint`.
                     if (onPrint) onPrint();
                     else if (typeof window !== 'undefined') window.print();
+                  }}
+                />
+                {/* Hairline separates Share + Print (in-report
+                    affordances) from Close (a destructive-ish exit
+                    action), matching Figma 1975:55513. */}
+                <DropdownSeparator />
+                {/* Close — third menu item, mirrors the close-X icon
+                    at the far-left of the header so users have two
+                    entry points (icon + overflow menu) to leave the
+                    report.  No-op when no `onClose` is wired (the
+                    icon-X stays inactive in that case too). */}
+                <DropdownItem
+                  icon={<IconCloseCircle size={20} />}
+                  label="Close"
+                  onClick={() => {
+                    setMoreMenuOpen(false);
+                    onClose?.();
                   }}
                 />
               </DropdownSurface>

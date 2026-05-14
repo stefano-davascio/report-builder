@@ -60,6 +60,10 @@ export const PROFILE_GROUPS: ProfileGroup[] = [
     profiles: [
       { id: 'tt-1', name: 'tenceclothier_rw', platform: 'tiktok', status: 'syncing' },
       { id: 'tt-2', name: 'tenceclothier_gh', platform: 'tiktok', status: null },
+      { id: 'tt-3', name: 'tenceclothier_tz', platform: 'tiktok', status: null },
+      { id: 'tt-4', name: 'tenceclothier_ug', platform: 'tiktok', status: null },
+      { id: 'tt-5', name: 'tenceclothier_ke', platform: 'tiktok', status: null },
+      { id: 'tt-6', name: 'tenceclothier_ng', platform: 'tiktok', status: null },
     ],
   },
   {

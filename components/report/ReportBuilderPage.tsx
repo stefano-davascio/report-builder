@@ -383,6 +383,23 @@ export function ReportBuilderPage({
     [],
   );
 
+  // Distinct platforms the user currently has at least one profile
+  // selected for — drives the contextual ordering of the
+  // `AddModulePanel`'s "All" tab.  First-seen order through
+  // `selectedProfiles` so the user's primary platform leads the
+  // section list in the panel.
+  const selectedProfilePlatforms = useMemo<import('@/types').Platform[]>(() => {
+    const seen = new Set<string>();
+    const out: import('@/types').Platform[] = [];
+    for (const p of selectedProfiles) {
+      if (!seen.has(p.platform)) {
+        seen.add(p.platform);
+        out.push(p.platform as import('@/types').Platform);
+      }
+    }
+    return out;
+  }, [selectedProfiles]);
+
   // Distinct union of Case-2 profiles affecting any visible module.
   // Memoized on the same deps the helper actually reads — module
   // structure, definition map, and the user's current selection.  An
@@ -755,6 +772,29 @@ export function ReportBuilderPage({
         showErrorStates={showErrorStates}
       />
 
+      {/* Global data-warning banner — Case 2 only.  Per Figma
+          1980:56769 the banner spans the FULL viewport width and
+          sits between the profile bar and the main flex row
+          (sidebar + panel + canvas), not inside the canvas card.
+          Hidden when there's nothing to warn about, the user
+          dismissed this session, or the report has no modules. */}
+      {modules.length > 0 &&
+        !bannerDismissed &&
+        affectedCase2Profiles.length > 0 && (
+          <GlobalDataWarningBanner
+            affectedCount={affectedCase2Profiles.length}
+            onOpenSelectProfiles={() => {
+              // The picker dropdown is edit-mode only — see the
+              // ProfileSelectionBar effect that force-closes it
+              // when !isEditMode.  Flip edit mode on first so the
+              // trigger lands on a mounted dropdown.
+              if (!isEditMode) setIsEditMode(true);
+              setSelectProfilesOpenTrigger((n) => n + 1);
+            }}
+            onDismiss={() => setBannerDismissed(true)}
+          />
+        )}
+
       {/* Main area — Figma "Panel position" frame (1139:172886).
           Horizontal layout at 1728-wide viewport:
             24 px ← gutter  | 52 px sidebar | 8 px gap |
@@ -842,6 +882,7 @@ export function ReportBuilderPage({
                 onDragStartElement={handleDragStartElement}
                 onDragEndElement={handleDragEndElement}
                 compact={panelCompact}
+                selectedProfilePlatforms={selectedProfilePlatforms}
               />
             </div>
           )}
@@ -881,40 +922,11 @@ export function ReportBuilderPage({
                   the wrapper grow on tall viewports so the grid sits
                   in a fully-painted canvas. */}
           {/* Global data-warning banner — Case 2 only.  Renders OUTSIDE
-              the modules-grid `p-6` wrapper because Figma 1857:73897
-              sits it with a 4 px inset from the canvas-card edge
-              (banner-x = card-x + 4, banner-y = card-y + 4), not the
-              24 px the modules grid uses.  Hidden when there's
-              nothing to warn about, the user dismissed this session,
-              or the canvas is in the empty state. */}
-          {modules.length > 0 &&
-            !bannerDismissed &&
-            affectedCase2Profiles.length > 0 && (
-              <div
-                className={cn(
-                  // White-card mode: the 4 px inset matches Figma
-                  // 1857:73897 — banner sits with a tight gap from
-                  // the canvas-card edge.  Grey mode: no card edge
-                  // to inset from, so the banner pins flush to the
-                  // canvas region.  The banner's own bg keeps it
-                  // visible against either parent.
-                  canvasMode === 'white' && 'px-[4px] pt-[4px]',
-                )}
-              >
-                <GlobalDataWarningBanner
-                  affectedCount={affectedCase2Profiles.length}
-                  onOpenSelectProfiles={() => {
-                    // The picker dropdown is edit-mode only — see the
-                    // ProfileSelectionBar effect that force-closes it
-                    // when !isEditMode.  Flip edit mode on first so
-                    // the trigger lands on a mounted dropdown.
-                    if (!isEditMode) setIsEditMode(true);
-                    setSelectProfilesOpenTrigger((n) => n + 1);
-                  }}
-                  onDismiss={() => setBannerDismissed(true)}
-                />
-              </div>
-            )}
+              the modules-grid `p-6` wrapper.  The banner now mounts
+              ABOVE this whole row at the page level (see
+              `<GlobalDataWarningBanner>` near the top of the
+              ReportBuilderPage tree, between `<ProfileSelectionBar>`
+              and this flex row), so no in-card render lives here. */}
           <div
             className={cn(
               'h-full relative',
@@ -965,7 +977,12 @@ export function ReportBuilderPage({
                     cells, drop placeholders, etc.) so the card never
                     gets visually buried. */}
             {isEditMode && modules.length === 0 && !isPanelOpen && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+              // Top-aligned with an 80 px offset (was
+              // vertically centered).  Pulls the card up so it
+              // anchors near the top of the empty canvas instead
+              // of floating in the middle, matching the Figma
+              // intent.
+              <div className="absolute inset-0 z-10 flex items-start justify-center pt-[80px] pointer-events-none">
                 <div className="pointer-events-auto">
                   <EmptyBoardCard onAddFirstModule={handleTogglePanel} />
                 </div>

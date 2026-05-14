@@ -82,10 +82,11 @@ export function EmptyBoardCard({ onAddFirstModule }: EmptyBoardCardProps) {
         </div>
 
         {/* Text block — title + subtitle, 2 px gap, 38 px overall
-            (Figma 1393:411098). */}
-        <div className="flex flex-col gap-[2px] w-full">
+            (Figma 1393:411098).  Centered so the empty-state copy
+            reads as a single balanced cluster above the CTA. */}
+        <div className="flex flex-col gap-[2px] w-full text-center">
           <p className="text-[16px] leading-[22px] font-medium text-[#201E24]">
-            Add to board
+            Drag and drop modules onto the canvas.
           </p>
           <p
             className="text-[12px] leading-[16px] text-[#4C4B4F]"

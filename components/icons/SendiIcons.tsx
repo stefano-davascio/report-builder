@@ -346,6 +346,20 @@ export function IconPlusCircle({ className, size = 20, color = 'currentColor' }:
   );
 }
 
+// Figma: close_circle (1975:55513 — "Close" row in the report-header
+// more-actions dropdown).  Mirrors `IconPlusCircle`'s footprint
+// (21.5 × 21.5 viewBox, identical outer circle path) but swaps the
+// inner plus for an X — 6-unit centered cross from (7.75, 7.75) to
+// (13.75, 13.75) so the X visually matches the circle's stroke
+// weight without dominating it.
+export function IconCloseCircle({ className, size = 20, color = 'currentColor' }: IconProps) {
+  return (
+    <FigmaIcon size={size} color={color} nativeW={21.5} nativeH={21.5} className={className}>
+      <path d="M7.75 7.75L13.75 13.75M13.75 7.75L7.75 13.75M20.75 10.75C20.75 16.2728 16.2728 20.75 10.75 20.75C5.22715 20.75 0.75 16.2728 0.75 10.75C0.75 5.22715 5.22715 0.75 10.75 0.75C16.2728 0.75 20.75 5.22715 20.75 10.75Z" {...S} />
+    </FigmaIcon>
+  );
+}
+
 // Figma: list-bars (1844:78434, slot 3 — `Vector`).  Replaces the
 // older 2×2 grid glyph: 4 horizontal bars (3 long + 3 short tick
 // marks) at native viewBox 15.25 × 11.5, stroke 1.5.  The simpler

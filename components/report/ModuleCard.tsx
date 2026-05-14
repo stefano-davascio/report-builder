@@ -448,11 +448,18 @@ function ModuleCardImpl({
     if (networkBinding !== 'cross-network') return p.platform === networkBinding;
     return platformSet.has(p.platform);
   });
-  // True when the module is bound to a specific network but the user
-  // hasn't selected a profile on that network. Drives the blurred
-  // empty-state overlay rendered below the chart content.
-  const isMissingNetworkMatch =
-    networkBinding !== 'cross-network' && profilesForModule.length === 0;
+  // True when no profile in the user's current selection matches
+  // the module — either:
+  //   • the module is network-bound (e.g. TikTok) but the user has
+  //     no TikTok profile selected, OR
+  //   • the module is cross-network but the user has no profile
+  //     selected at all (a brand-new "from scratch" report starts
+  //     here).
+  // Drives the blurred empty-state overlay rendered below the chart
+  // content.  `NetworkMissingOverlay` differentiates the copy: a
+  // specific-platform binding names the network ("…select a TikTok
+  // profile."), cross-network falls back to a generic prompt.
+  const isMissingNetworkMatch = profilesForModule.length === 0;
 
   // Warning derivation — Case 2 (reconnect / permission) takes
   // precedence over Case 1 (partial data) so a module that has both
@@ -694,11 +701,6 @@ function ModuleCardImpl({
         )}
       >
         {getModuleContent(module, definition, contentHeight, contentWidth, profilesForModule)}
-        {/* `networkBinding` is narrowed to `Platform` here by TS alias
-            narrowing: `isMissingNetworkMatch` already encodes the
-            `!== 'cross-network'` check on this `const`, so the
-            secondary comparison would be a redundant
-            no-overlap-type error. */}
         {isMissingNetworkMatch && (
           <NetworkMissingOverlay network={networkBinding} />
         )}
@@ -732,9 +734,18 @@ const NETWORK_DISPLAY_LABEL: Record<Platform, string> = {
 };
 
 /**
- * Empty-state overlay rendered over a module's chart area when its
- * `network` binding doesn't match any of the user's currently-selected
- * profiles.  Figma 1916:37020.
+ * Empty-state overlay rendered over a module's chart area when no
+ * profile in the user's current selection matches the module.
+ * Figma 1916:37020.
+ *
+ * Two cases:
+ *   • Network-bound module (e.g. TikTok) with no profile on that
+ *     network selected → body names the platform
+ *     ("…select a TikTok profile.").
+ *   • Cross-network module with NO profiles selected at all (the
+ *     fresh "Start from scratch" report state) → generic copy
+ *     ("…select a compatible profile.") since there's no single
+ *     platform to point at.
  *
  * The chart skeleton (axes / mock data / legend) still renders
  * underneath — we don't blank it out — so the overlay's translucent
@@ -744,13 +755,16 @@ const NETWORK_DISPLAY_LABEL: Record<Platform, string> = {
  * Positioning is `absolute inset-0`; the parent provides `relative`
  * and `overflow-hidden` so the overlay clips to the rounded content
  * area instead of bleeding past the card chrome.
- *
- * Body copy names the specific network ("…select a TikTok profile.")
- * rather than the generic "compatible profile" so the user knows
- * exactly which add-profile flow to follow.
  */
-function NetworkMissingOverlay({ network }: { network: Platform }) {
-  const label = NETWORK_DISPLAY_LABEL[network];
+function NetworkMissingOverlay({
+  network,
+}: {
+  network: Platform | 'cross-network';
+}) {
+  const bodyCopy =
+    network === 'cross-network'
+      ? 'Data will appear here if you select a compatible profile.'
+      : `Data will appear here if you select a ${NETWORK_DISPLAY_LABEL[network]} profile.`;
   return (
     <div
       // BRAND/light @ 80% alpha + 5 px backdrop blur per Figma
@@ -769,7 +783,7 @@ function NetworkMissingOverlay({ network }: { network: Platform }) {
           Select a matching profile to see data
         </p>
         <p className="text-[14px] leading-[21px] font-normal text-[#626165]">
-          {`Data will appear here if you select a ${label} profile.`}
+          {bodyCopy}
         </p>
       </div>
     </div>

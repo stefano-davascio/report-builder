@@ -539,7 +539,14 @@ function SelectProfilesDropdown({
                     onClick={() => onToggleGroup(group.platform)}
                     className="flex items-center gap-[6px] w-full px-[8px] py-[10px] rounded-[4px] hover:bg-[rgba(81,61,217,0.1)] transition-colors text-left"
                   >
-                    <div className="flex-shrink-0">
+                    {/* `flex items-center` collapses the wrapper to
+                        the checkbox's exact 24-px height — without
+                        it the wrapper inherits the parent's
+                        line-box descent space (~30 px in this
+                        context) and the inline-flex checkbox
+                        baseline-aligns to the top, pulling its
+                        visible body ~3 px above the row midline. */}
+                    <div className="flex items-center flex-shrink-0">
                       <Checkbox state={groupState} />
                     </div>
                     <div className="flex items-center gap-[4px] min-w-0">
@@ -570,7 +577,7 @@ function SelectProfilesDropdown({
                         onClick={() => onToggleProfile(profile.id)}
                         className="flex items-center gap-[6px] w-full pl-[16px] pr-[8px] py-[10px] rounded-[4px] hover:bg-[rgba(81,61,217,0.1)] transition-colors text-left"
                       >
-                        <div className="flex-shrink-0">
+                        <div className="flex items-center flex-shrink-0">
                           <Checkbox state={profileCheckState} />
                         </div>
                         <ProfileAvatarSquare profile={profile} />

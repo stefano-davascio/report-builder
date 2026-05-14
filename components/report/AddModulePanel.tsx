@@ -110,9 +110,24 @@ interface AddModulePanelProps {
    *                  "Add modules".
    */
   panelMode?: 'all' | 'modules' | 'elements';
+  /**
+   * Networks the user currently has at least one profile selected
+   * for — drives the contextual ordering of the new "All" tab.  When
+   * non-empty, the All view leads with groups for these platforms,
+   * then Cross-network, then Elements, then the rest.  When empty
+   * (no profile selection), it leads with Elements + Cross-network
+   * instead.  Order within the prop should reflect the user's pick
+   * order so they see their primary platform's modules first.
+   */
+  selectedProfilePlatforms?: Platform[];
 }
 
-type PanelView = 'network' | 'visual' | 'elements';
+// `'all'` is the new unified default view — combines elements,
+// cross-network modules, and per-network modules with contextual
+// ordering driven by `selectedProfilePlatforms` (which networks the
+// user currently has profiles selected for).  See `allViewGroups`
+// below for the ordering rules.
+type PanelView = 'all' | 'network' | 'visual' | 'elements';
 
 // Network icon dispatch — maps a NetworkFilterId (or Platform for PlatformBadge)
 // to the Figma-exported icon component in NetworkIcons.tsx. Each icon is
@@ -516,24 +531,26 @@ export function AddModulePanel({
   onDragEndElement,
   compact = false,
   panelMode = 'all',
+  selectedProfilePlatforms = [],
 }: AddModulePanelProps) {
   // Internal `view` state is the user-driven tab selection (only
   // honoured in panelMode='all' / 'modules'; ignored in 'elements'
   // since that mode pins the view to elements unconditionally).
   const [view, setView] = useState<PanelView>(
-    panelMode === 'elements' ? 'elements' : 'network',
+    panelMode === 'elements' ? 'elements' : 'all',
   );
 
   // Derived effective view — collapses panelMode + internal view into
   // a single value the renderers below switch on.  In 'elements' mode
   // the user can't change the view, so we always return 'elements'.
   // In 'modules' mode we never render the Elements list, so an
-  // 'elements' internal state coerces back to 'network'.
+  // 'elements' internal state coerces back to 'all' (the unified
+  // default for both 'all' and 'modules' panel modes).
   const effectiveView: PanelView =
     panelMode === 'elements'
       ? 'elements'
       : panelMode === 'modules' && view === 'elements'
-        ? 'network'
+        ? 'all'
         : view;
 
   // When panelMode flips at runtime (Scenario Switcher swap), keep
@@ -541,7 +558,7 @@ export function AddModulePanel({
   // resurrect a stale tab selection.
   useEffect(() => {
     if (panelMode === 'elements' && view !== 'elements') setView('elements');
-    else if (panelMode === 'modules' && view === 'elements') setView('network');
+    else if (panelMode === 'modules' && view === 'elements') setView('all');
   }, [panelMode, view]);
   const [search, setSearch] = useState('');
   const [selectedNetwork, setSelectedNetwork] = useState<NetworkFilterId>('all');
@@ -575,8 +592,18 @@ export function AddModulePanel({
     let mods = MODULE_DEFINITIONS;
 
     if (search) {
+      // Search is intentionally GLOBAL — it bypasses the active
+      // tab's network / visual-type filter so a query like
+      // "engagement" surfaces every match regardless of whether the
+      // user is currently on the Networks or Charts tab.  The
+      // render layer hides tabs + filter rows whenever search is
+      // active, so the user sees one unified result list.
       const q = search.toLowerCase();
-      mods = mods.filter(m => m.name.toLowerCase().includes(q) || m.description.toLowerCase().includes(q));
+      return mods.filter(
+        (m) =>
+          m.name.toLowerCase().includes(q) ||
+          m.description.toLowerCase().includes(q),
+      );
     }
 
     if (effectiveView === 'network') {
@@ -643,6 +670,134 @@ export function AddModulePanel({
     return groups;
   }, [filteredModules, effectiveView, search, selectedNetwork, selectedVisualType]);
 
+  // ─── "All" tab — contextually ordered groups ──────────────────────────
+  //
+  // The All view is a unified list combining elements, cross-network
+  // modules, and per-network modules.  Ordering is reviewer-friendly:
+  //
+  //   • If `selectedProfilePlatforms` is non-empty:
+  //       1. Each selected platform's group (in pick order)
+  //       2. Cross-network
+  //       3. Elements (single flat group — see `ALL_ELEMENT_ORDER`)
+  //       4. Other / unselected platforms (NETWORK_OPTIONS order)
+  //   • If empty (no profile selection):
+  //       1. Elements
+  //       2. Cross-network
+  //       3. All platform groups in NETWORK_OPTIONS order
+  //
+  // Elements are flattened into a single "Elements" group here even
+  // though the dedicated Elements tab keeps the Basic blocks / Media
+  // sub-headers — at this view's density a single group reads
+  // cleaner.  When `panelMode === 'modules'` (split-sidebar Data
+  // modules panel), Elements are excluded entirely since they live
+  // in a sibling Elements panel; including them would be confusing
+  // duplication.
+  //
+  // Search shortcuts this entire ordering — when `search` is active
+  // the parent render falls through to the search-result branch,
+  // which groups by each module's own category (and includes
+  // matching elements separately).
+  type AllViewGroup =
+    | { kind: 'elements'; label: string; items: ElementDefinition[] }
+    | {
+        kind: 'modules';
+        label: string;
+        platform: Platform | null;
+        items: ModuleDefinition[];
+      };
+  const allViewGroups = useMemo<AllViewGroup[]>(() => {
+    if (effectiveView !== 'all') return [];
+
+    // Modules bucketed by their declared `category`.  Categories
+    // mirror NETWORK_OPTIONS labels (e.g. 'Facebook', 'TikTok') plus
+    // 'Cross-network'.  Search-filtered set so the All view respects
+    // active filters even though the search input itself bypasses
+    // the All branch via a separate render path.
+    const byCategory = new Map<string, ModuleDefinition[]>();
+    for (const m of filteredModules) {
+      const list = byCategory.get(m.category) ?? [];
+      list.push(m);
+      byCategory.set(m.category, list);
+    }
+
+    // Resolve a Platform key to the category string used by
+    // MODULE_DEFINITIONS (kept in sync with NETWORK_OPTIONS.label).
+    const platformLabel = (p: Platform): string => {
+      const opt = NETWORK_OPTIONS.find(
+        (o) => o.id === p || (o.id === 'ga' && p === 'google-analytics'),
+      );
+      return opt?.label ?? p;
+    };
+
+    const groups: AllViewGroup[] = [];
+    const consumed = new Set<string>();
+
+    const pushPlatformGroup = (p: Platform) => {
+      const label = platformLabel(p);
+      const items = byCategory.get(label);
+      if (items && items.length > 0) {
+        groups.push({ kind: 'modules', label, platform: p, items });
+        consumed.add(label);
+      }
+    };
+
+    const pushCrossNetwork = () => {
+      const items = byCategory.get('Cross-network');
+      if (items && items.length > 0) {
+        groups.push({ kind: 'modules', label: 'Cross-network', platform: null, items });
+        consumed.add('Cross-network');
+      }
+    };
+
+    const pushElements = () => {
+      // Elements in the All view use a stable, hand-curated order
+      // (Text → Heading 1 → Heading 2 → Divider → Image → File →
+      // Link → Emoji) instead of the Basic blocks / Media
+      // sub-categories the dedicated Elements tab uses.
+      if (panelMode === 'modules') return; // split-sidebar: Elements live elsewhere
+      if (filteredElements.length === 0) return;
+      groups.push({
+        kind: 'elements',
+        label: 'Elements',
+        items: filteredElements,
+      });
+    };
+
+    if (selectedProfilePlatforms.length > 0) {
+      // Context: profile selection drives the lead order.
+      for (const p of selectedProfilePlatforms) pushPlatformGroup(p);
+      pushCrossNetwork();
+      pushElements();
+      // Other platforms — every category that's not been consumed,
+      // walked in NETWORK_OPTIONS order for a deterministic tail.
+      for (const opt of NETWORK_OPTIONS) {
+        if (opt.id === 'all') continue;
+        const p = filterIdToPlatform(opt.id);
+        if (!p) continue;
+        if (consumed.has(platformLabel(p))) continue;
+        pushPlatformGroup(p);
+      }
+    } else {
+      // Empty selection: lead with Elements + Cross-network, then
+      // every platform in catalog order.
+      pushElements();
+      pushCrossNetwork();
+      for (const opt of NETWORK_OPTIONS) {
+        if (opt.id === 'all') continue;
+        const p = filterIdToPlatform(opt.id);
+        if (!p) continue;
+        pushPlatformGroup(p);
+      }
+    }
+    return groups;
+  }, [
+    effectiveView,
+    filteredModules,
+    filteredElements,
+    selectedProfilePlatforms,
+    panelMode,
+  ]);
+
   return (
     <div className="flex flex-col h-full bg-white">
       {/* Header — Figma 1139:172915. 52px tall, border-b #E8E8E9, 12px/10px
@@ -687,7 +842,15 @@ export function AddModulePanel({
              that on a native input, so we render the text at 16 px leading
              which is the visible row height Figma produces. */}
       <div className="px-[12px] pt-[8px] pb-[8px] flex-shrink-0">
-        <div className="flex items-center gap-[8px] p-[8px] bg-[#F3F3F4] rounded-[6px] overflow-hidden focus-within:ring-2 focus-within:ring-[#4D36FF]/20 transition-all">
+        {/* Focused chrome mirrors the landing-page filter search
+            (FilterDropdown.tsx → `SEARCH_INPUT_WRAP`, Figma
+            1670:42280): a 1-px brand-purple border swap instead of
+            the previous low-alpha ring shadow.  The transparent
+            border always renders so flipping its color on focus
+            doesn't nudge the box by 2 px.  Existing geometry
+            (`p-[8px]`, `rounded-[6px]`, `bg-[#F3F3F4]`) is
+            preserved — only the focus state changes. */}
+        <div className="flex items-center gap-[8px] p-[8px] bg-[#F3F3F4] rounded-[6px] overflow-hidden border border-transparent focus-within:border-[#4D36FF] transition-colors">
           <IconSearch size={16} color="#201E24" className="flex-shrink-0" />
           <input
             type="text"
@@ -700,20 +863,26 @@ export function AddModulePanel({
       </div>
 
       {/* Tabs — Figma Frame 1026-38534: pill buttons, selected bg
-          rgba(32,30,36,0.05).  Hidden entirely in 'elements' panelMode
-          (split sidebar's Elements panel); reduced to Network +
-          Visual type only in 'modules' mode. */}
-      {panelMode !== 'elements' && (
+          rgba(32,30,36,0.05).  Hidden entirely in 'elements'
+          panelMode (split sidebar's Elements panel); hidden when a
+          search query is active (results are unified across tabs).
+          'modules' panelMode drops the Elements tab since that
+          surface lives in a separate split-panel.  The new "All" tab
+          is the unified default — combines elements + cross-network
+          + per-network modules with contextual ordering. */}
+      {panelMode !== 'elements' && !search && (
         <div className="px-[12px] pt-[4px] pb-[8px] flex-shrink-0">
           <div className="flex items-center gap-[8px]">
             {(panelMode === 'modules'
               ? ([
-                  { id: 'network', label: 'Network' },
-                  { id: 'visual', label: 'Visual type' },
+                  { id: 'all', label: 'All' },
+                  { id: 'network', label: 'Networks' },
+                  { id: 'visual', label: 'Charts' },
                 ] as { id: PanelView; label: string }[])
               : ([
-                  { id: 'network', label: 'Network' },
-                  { id: 'visual', label: 'Visual type' },
+                  { id: 'all', label: 'All' },
+                  { id: 'network', label: 'Networks' },
+                  { id: 'visual', label: 'Charts' },
                   { id: 'elements', label: 'Elements' },
                 ] as { id: PanelView; label: string }[])
             ).map((tab) => (
@@ -818,7 +987,54 @@ export function AddModulePanel({
           DARK/dark--tint_40 #79787B, left-[11px] from panel edge). */}
       <ScrollArea className="flex-1 min-h-0">
         <div className="px-[12px] pt-[12px] pb-[12px] flex flex-col">
-          {effectiveView === 'elements' ? (
+          {effectiveView === 'all' && !search ? (
+            // ─── "All" tab — contextually ordered groups ─────────
+            // Walks `allViewGroups` (computed above) and renders
+            // either an elements row block or a modules row block
+            // per group.  Modules in a per-platform group inherit
+            // that platform for drag-binding + the collapsed
+            // right-rail platform icon.  Cross-network modules
+            // drag as 'cross-network'.
+            <>
+              {allViewGroups.length === 0 && (
+                <div className="text-center py-8">
+                  <p className="text-[13px] text-[#79787B]">No modules found</p>
+                </div>
+              )}
+              {allViewGroups.map((group) => (
+                <div key={`all-${group.kind}-${group.label}`} className="mb-[12px] last:mb-0">
+                  <p className="-ml-[1px] text-[14px] leading-[21px] font-normal text-[#79787B] pb-[8px]">
+                    {group.label}
+                  </p>
+                  <div className="flex flex-col gap-[8px]">
+                    {group.kind === 'elements'
+                      ? group.items.map((def) => (
+                          <ElementListItem
+                            key={def.id}
+                            def={def}
+                            compact={compact}
+                            onAdd={(d) => onAddElement?.(d)}
+                            onDragStartElement={onDragStartElement}
+                            onDragEndElement={onDragEndElement}
+                          />
+                        ))
+                      : group.items.map((def) => (
+                          <ModuleListItem
+                            key={def.id}
+                            def={def}
+                            network={group.platform ?? 'cross-network'}
+                            onAdd={onAdd}
+                            onDragStartModule={onDragStartModule}
+                            onDragEndModule={onDragEndModule}
+                            displayPlatform={group.platform ?? undefined}
+                            compact={compact}
+                          />
+                        ))}
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : effectiveView === 'elements' ? (
             <>
               {(Object.entries(groupedElements) as [ElementCategory, ElementDefinition[]][])
                 .filter(([, els]) => els.length > 0)
@@ -889,11 +1105,37 @@ export function AddModulePanel({
                   </div>
                 ));
               })()}
-              {filteredModules.length === 0 && (
-                <div className="text-center py-8">
-                  <p className="text-[13px] text-[#79787B]">No modules found</p>
+              {/* Search results pull in matching elements alongside
+                  matching modules so reviewers see one unified
+                  result list regardless of which tab they typed
+                  from.  Skipped when the panel is the split-sidebar
+                  Data modules variant (`panelMode === 'modules'`)
+                  since Elements live in a sibling panel there. */}
+              {search && panelMode !== 'modules' && filteredElements.length > 0 && (
+                <div className="mb-[12px] last:mb-0">
+                  <p className="-ml-[1px] text-[14px] leading-[21px] font-normal text-[#79787B] pb-[8px]">
+                    Elements
+                  </p>
+                  <div className="flex flex-col gap-[8px]">
+                    {filteredElements.map((def) => (
+                      <ElementListItem
+                        key={def.id}
+                        def={def}
+                        compact={compact}
+                        onAdd={(d) => onAddElement?.(d)}
+                        onDragStartElement={onDragStartElement}
+                        onDragEndElement={onDragEndElement}
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
+              {filteredModules.length === 0 &&
+                !(search && panelMode !== 'modules' && filteredElements.length > 0) && (
+                  <div className="text-center py-8">
+                    <p className="text-[13px] text-[#79787B]">No modules found</p>
+                  </div>
+                )}
             </>
           )}
         </div>

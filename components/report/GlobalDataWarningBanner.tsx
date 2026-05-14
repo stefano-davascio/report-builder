@@ -57,15 +57,14 @@ export function GlobalDataWarningBanner({
 
   return (
     <div
-      // Outer chrome: danger-tint background, 4 px radius, 12-px
-      // vertical padding for the text, 8-px horizontal so the icon +
-      // close affordance still feel anchored at the edges.  `flex` so
-      // the close button can pin to the far right via
-      // `justify-between`.  No drop-shadow — the banner sits inside
-      // the canvas card and the card's own chrome owns the elevation.
-      // No outer margin: the parent (`ReportBuilderPage`) owns the
-      // 4 px inset from the canvas-card edge per Figma 1857:73897.
-      className="flex items-center justify-between gap-[8px] bg-[#FCE7E9] rounded-[4px] px-[8px] py-[12px]"
+      // Outer chrome: danger-tint background, 12-px vertical / 8-px
+      // horizontal padding (Figma 1980:56769).  `flex` + justify-
+      // between pins the close affordance to the far right.  No
+      // rounded corners — per the new placement the banner spans
+      // the full viewport width directly under the profile bar, so
+      // sharp edges read as a horizontal strip rather than a card.
+      // No outer margin / shadow — the parent owns layout.
+      className="flex items-center justify-between gap-[8px] bg-[#FCE7E9] px-[8px] py-[12px]"
       role="alert"
       data-figma-node-id="1914:36680"
     >

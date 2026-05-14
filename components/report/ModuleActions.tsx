@@ -378,7 +378,7 @@ export function DropdownItem({
         type="button"
         onClick={onClick}
         onMouseDown={(e) => e.stopPropagation()}
-        className="flex items-center gap-4 h-10 px-4 py-2 rounded-[4px] hover:bg-[#F3F3F4] transition-colors w-full"
+        className="flex items-center gap-4 h-10 px-4 py-2 rounded-[4px] hover:bg-[#EDEAFF] transition-colors w-full"
       >
         <span className="flex-shrink-0 flex items-center justify-center text-[#4C4B4F]">
           {icon}
@@ -393,6 +393,18 @@ export function DropdownItem({
         )}
       </button>
     </li>
+  );
+}
+
+/**
+ * `DropdownSeparator` — a 1-px hairline between two clusters of
+ * dropdown items.  Renders as an `<li role="separator">` so screen
+ * readers announce the break.  `mx-[-8px]` so the line spans the
+ * full surface width (countering the parent `<ul>`'s `px-2`).
+ */
+export function DropdownSeparator() {
+  return (
+    <li role="separator" aria-hidden="true" className="my-[6px] h-px bg-[#E8E8E9] mx-[-8px]" />
   );
 }
 
