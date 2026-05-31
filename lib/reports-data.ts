@@ -181,11 +181,9 @@ function presetTikTokOnly(): ReportModule[] {
 
     // Rows 7–9 (y=96 / 120 / 144, h=24 each) — video carousels
     // stacked full-width.  Video engagement renders the Figma
-    // 2222:40922 240×479 card strip; watch metrics + sources are
+    // 2222:40922 240 × 479 card strip; watch metrics + sources are
     // still on the legacy ListModule render until their dedicated
-    // components land.  h=24 gives ~546 px usable height — enough
-    // for the 479 px card + 16 px footer gap + ~36 px footer with
-    // a tiny breathing margin.
+    // components land.
     { id: 'mod-tt-vid-engagement',     definitionId: 'tiktok-video-engagement',     chartType: 'list',
       layout: { i: 'mod-tt-vid-engagement',     x: 0, y: 96,  w: 4, h: 24, minW: 1, minH: 18 } },
     { id: 'mod-tt-vid-watch-metrics',  definitionId: 'tiktok-video-watch-metrics',  chartType: 'list',
@@ -193,8 +191,8 @@ function presetTikTokOnly(): ReportModule[] {
     { id: 'mod-tt-vid-sources',        definitionId: 'tiktok-video-sources',        chartType: 'list',
       layout: { i: 'mod-tt-vid-sources',        x: 0, y: 144, w: 4, h: 24, minW: 1, minH: 18 } },
 
-    // Row 10 (y=168, h=18) — audience demographics pair (closes the
-    // template).
+    // Row 10 (y=168, h=18) — audience demographics pair (closes
+    // the template).
     { id: 'mod-tt-aud-gender',         definitionId: 'audience-by-gender',          chartType: 'pie',
       layout: { i: 'mod-tt-aud-gender',         x: 0, y: 168, w: 2, h: 18, minW: 1, minH: 12 } },
     { id: 'mod-tt-aud-country',        definitionId: 'audience-by-country',         chartType: 'list',

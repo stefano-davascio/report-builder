@@ -533,8 +533,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     // padding top+bottom, 14 px title row, 24 px header gap)
     // = 546 px usable.  The card is a fixed 479 px tall and the
     // footer + 16 px gap eats ~52 px, leaving ~15 px of breathing
-    // room at the bottom.  Bumping higher just adds invisible empty
-    // space below the footer — the card itself doesn't grow.
+    // room at the bottom.
     defaultH: 24,
   },
   {
@@ -857,6 +856,15 @@ export const MOCK_LIST_DATA: Record<string, ListItem[]> = {
 // any TikTok handle in the user's network.  Sibling carousels
 // (`tiktok-video-watch-metrics`, `tiktok-video-sources`) will ship
 // their own payloads with module-specific metric columns.
+// Picsum.photos delivers stable random JPEGs given a seed — same
+// seed always resolves to the same image, so the deck doesn't
+// reshuffle on reload.  The seeds below are hand-picked words that
+// happen to retrieve photos that read plausibly as "creator content"
+// (fashion / lifestyle / portrait crops) at the 140 × 249 portrait
+// inset we render them into.  Bumped to 2× (280 × 498) for retina.
+const VIDEO_PREVIEW_IMAGE = (seed: string) =>
+  `https://picsum.photos/seed/${seed}/280/498`;
+
 export const MOCK_VIDEO_ENGAGEMENT_CARDS: VideoCardData[] = [
   {
     id: 've-1',
@@ -864,6 +872,7 @@ export const MOCK_VIDEO_ENGAGEMENT_CARDS: VideoCardData[] = [
     profile: { name: 'Tenceclothier', handle: '@tenceclothier_ng', monogram: 'T' },
     caption: '🌍✨ Navigating the Wild World of Social Media! ✨📱 From viral trends to influencer hacks, join me as I explore how social media shapes our lives! 🎉📈',
     thumbnail: 'linear-gradient(135deg, #FFC4D8 0%, #B8C4F9 55%, #9F8DF0 100%)',
+    image: VIDEO_PREVIEW_IMAGE('tence-rw-01'),
     metrics: [
       { label: 'Views',    value: '204' },
       { label: 'Likes',    value: '134' },
@@ -877,6 +886,7 @@ export const MOCK_VIDEO_ENGAGEMENT_CARDS: VideoCardData[] = [
     profile: { name: 'Tenceclothier', handle: '@tenceclothier_gh', monogram: 'T' },
     caption: 'Behind the scenes of our newest spring drop 🌸 Watch how the campaign came together from sketch to storefront.',
     thumbnail: 'linear-gradient(135deg, #FEE5B6 0%, #FFB48A 55%, #F77B6E 100%)',
+    image: VIDEO_PREVIEW_IMAGE('tence-gh-02'),
     metrics: [
       { label: 'Views',    value: '192' },
       { label: 'Likes',    value: '128' },
@@ -890,6 +900,7 @@ export const MOCK_VIDEO_ENGAGEMENT_CARDS: VideoCardData[] = [
     profile: { name: 'Tenceclothier', handle: '@tenceclothier_ke', monogram: 'T' },
     caption: 'A quick GRWM with our signature linen tee 🌿 Comfy, breathable, and slept-in soft from day one.',
     thumbnail: 'linear-gradient(135deg, #C7F0E1 0%, #95CAEA 55%, #5C8FE0 100%)',
+    image: VIDEO_PREVIEW_IMAGE('tence-ke-03'),
     metrics: [
       { label: 'Views',    value: '186' },
       { label: 'Likes',    value: '121' },
@@ -903,6 +914,7 @@ export const MOCK_VIDEO_ENGAGEMENT_CARDS: VideoCardData[] = [
     profile: { name: 'Tenceclothier', handle: '@tenceclothier_rw', monogram: 'T' },
     caption: 'How three friends styled the same jacket three different ways 🧥 Comment which look you’d wear out tonight!',
     thumbnail: 'linear-gradient(135deg, #E0CDF8 0%, #B5A8F0 55%, #8E78EA 100%)',
+    image: VIDEO_PREVIEW_IMAGE('tence-rw-04'),
     metrics: [
       { label: 'Views',    value: '178' },
       { label: 'Likes',    value: '114' },
@@ -916,6 +928,7 @@ export const MOCK_VIDEO_ENGAGEMENT_CARDS: VideoCardData[] = [
     profile: { name: 'Tenceclothier', handle: '@tenceclothier_tz', monogram: 'T' },
     caption: 'Studio tour with @tenceclothier_tz — patternmaking, dyeing, and the cutting table that started it all ✂️',
     thumbnail: 'linear-gradient(135deg, #F5E8D2 0%, #E0B57A 55%, #B07E3D 100%)',
+    image: VIDEO_PREVIEW_IMAGE('tence-tz-05'),
     metrics: [
       { label: 'Views',    value: '165' },
       { label: 'Likes',    value: '108' },
@@ -929,6 +942,7 @@ export const MOCK_VIDEO_ENGAGEMENT_CARDS: VideoCardData[] = [
     profile: { name: 'Tenceclothier', handle: '@tenceclothier_ug', monogram: 'T' },
     caption: 'Trying every customer-tagged outfit from this week — which one is the winner? Watch til the end 👀',
     thumbnail: 'linear-gradient(135deg, #D2F0E2 0%, #92D3A5 55%, #4FA877 100%)',
+    image: VIDEO_PREVIEW_IMAGE('tence-ug-06'),
     metrics: [
       { label: 'Views',    value: '152' },
       { label: 'Likes',    value: '97'  },
@@ -942,6 +956,7 @@ export const MOCK_VIDEO_ENGAGEMENT_CARDS: VideoCardData[] = [
     profile: { name: 'Tenceclothier', handle: '@tenceclothier_ng', monogram: 'T' },
     caption: 'Capsule wardrobe challenge — five pieces, seven days, zero repeats. Day-by-day breakdown 👇',
     thumbnail: 'linear-gradient(135deg, #FFD5E0 0%, #FF98B6 55%, #E15E8C 100%)',
+    image: VIDEO_PREVIEW_IMAGE('tence-ng-07'),
     metrics: [
       { label: 'Views',    value: '141' },
       { label: 'Likes',    value: '89'  },
@@ -955,6 +970,7 @@ export const MOCK_VIDEO_ENGAGEMENT_CARDS: VideoCardData[] = [
     profile: { name: 'Tenceclothier', handle: '@tenceclothier_gh', monogram: 'T' },
     caption: 'Backstage at the Accra pop-up — first 50 customers, sold-out racks, and one happy team 🛍️',
     thumbnail: 'linear-gradient(135deg, #C7E2F8 0%, #7AB1E6 55%, #3D7FCC 100%)',
+    image: VIDEO_PREVIEW_IMAGE('tence-gh-08'),
     metrics: [
       { label: 'Views',    value: '128' },
       { label: 'Likes',    value: '78'  },

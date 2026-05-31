@@ -192,11 +192,18 @@ export interface VideoCardData {
   /** Free-text caption.  Truncated to 2 lines by the card renderer
    *  via `-webkit-line-clamp`. */
   caption: string;
-  /** CSS background value used as the thumbnail.  Use a
-   *  `linear-gradient(...)` per card so we don't need to ship a
-   *  binary asset per video — each card gets its own tint so the
-   *  strip visually reads as "different posts". */
+  /** CSS background value used as the thumbnail BACKDROP — visible
+   *  behind / around the 9 : 16 inner video preview as a 50 px strip
+   *  on each side.  Per-card gradient so the strip's left/right
+   *  letterboxing reads visually different card-to-card. */
   thumbnail: string;
+  /** URL of the image rendered inside the 9 : 16 inner video preview
+   *  to make each card read as "different post / different video"
+   *  instead of identical dark frames.  Sourced from
+   *  `picsum.photos/seed/<seed>/280/498` (2× the rendered 140 × 249
+   *  for retina sharpness) so the seed → image mapping is stable
+   *  across reloads. */
+  image: string;
   /** 4-row metric table.  Order is preserved as authored.  Sister
    *  carousels (watch metrics, sources) supply their own
    *  module-specific labels here. */

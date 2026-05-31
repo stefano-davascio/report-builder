@@ -38,11 +38,12 @@ import { COMPACT_NETWORKS_THRESHOLD_PX } from './AudienceGrowthModule';
 import { IconArrowRight } from '@/components/icons/SendiIcons';
 
 const CARD_WIDTH = 240;
-/** Total card height per Figma 2222:40922 — sum of the three vertical
- *  sections (details 118 + attachment 249 + summary 112).  Pinned
- *  explicitly so the card doesn't stretch to fill the strip's available
- *  vertical space (the carousel container can be taller than a single
- *  card when the user resizes the module). */
+/** Thumbnail height per Figma 2222:40954 — 249 px.  Same as the
+ *  original; the card chrome (and the surrounding preset layout)
+ *  is built around this number. */
+const THUMB_HEIGHT = 249;
+/** Total card height per Figma 2222:40922 — sum of the three
+ *  vertical sections (details 118 + thumbnail 249 + summary 112). */
 const CARD_HEIGHT = 479;
 const CARD_GAP = 24;
 /** One-click advance = exactly one card + one gap, so the next card
@@ -266,16 +267,41 @@ function VideoCard({ card }: { card: VideoCardData }) {
           {card.caption}
         </p>
       </div>
-      {/* Attachment — gradient thumbnail + centered play triangle */}
+      {/* Attachment — gradient backdrop with a centered 9 : 16
+          TikTok video preview filling the full thumbnail height.
+          The outer 240 × 249 thumbnail stays Figma-spec; inside, the
+          140 × 249 dark preview reads as a TikTok-aspect video frame
+          (140 / 249 = 0.5622 ≈ 9 / 16 = 0.5625) with the gradient
+          showing through as a 50 px backdrop on each side, the way
+          TikTok feeds letterbox portrait videos. */}
       <div
         className="relative flex items-center justify-center flex-shrink-0"
         style={{
           width: CARD_WIDTH,
-          height: 249,
+          height: THUMB_HEIGHT,
           background: card.thumbnail,
         }}
       >
-        <PlayIcon />
+        <div
+          className="relative flex items-center justify-center"
+          style={{
+            // Exact 9 : 16 at the thumbnail's 249 px height.
+            width: 140,
+            height: THUMB_HEIGHT,
+            // Per-card placeholder image (picsum.photos seeded
+            // JPEG, see `VIDEO_PREVIEW_IMAGE` in mock-data.ts) so
+            // every card reads as a different post.  `#1A1A1F` is
+            // the fallback fill while the image streams in, so the
+            // first-paint frame still reads as a paused video
+            // rather than flashing white before the image
+            // resolves.  `background-size: cover` crops the
+            // landscape source to the portrait inset without
+            // distorting it.
+            background: `#1A1A1F url(${card.image}) center/cover no-repeat`,
+          }}
+        >
+          <PlayIcon />
+        </div>
       </div>
       {/* Summary — 4-row metric table.  Each row has a bottom border
           except the last, matching the Figma's `border-b` on rows 1–3
