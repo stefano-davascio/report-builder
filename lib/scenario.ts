@@ -58,6 +58,15 @@ export type SidebarMode = 'combined' | 'split';
  */
 export type CanvasMode = 'white' | 'grey';
 
+/** Chart curve interpolation — drives the Recharts `type` prop on
+ *  every time-series Area / Line in the report-builder.  Two flavors:
+ *    • 'linear'   — straight segments between data points (sharp,
+ *                   architectural feel; matches the new Figma comps).
+ *    • 'monotone' — smooth Bezier curve (the older render style).
+ *  Default `'linear'` because the new design system favors the
+ *  straight-cut variant. */
+export type ChartCurveStyle = 'linear' | 'monotone';
+
 /** Independent UI capability flags.  Each one gates a surface that's
  *  built but not yet ready to ship — toggling exposes it for review
  *  without removing any code. Default OFF (production scope) on first
@@ -84,6 +93,8 @@ export interface Scenario {
   /** Report-builder canvas treatment — white card vs grey background.
    *  See `CanvasMode` for details.  Defaults to 'white'. */
   canvasMode: CanvasMode;
+  /** Chart curve interpolation — see `ChartCurveStyle` for details. */
+  chartCurveStyle: ChartCurveStyle;
   /** Master toggle for every profile-driven error / warning surface
    *  in the report builder (global Action-required banner, per-module
    *  warning icons + tooltips, per-profile status pills in the
@@ -104,6 +115,7 @@ const DEFAULT_SCENARIO: Scenario = {
   },
   sidebarMode: 'combined',
   canvasMode: 'white',
+  chartCurveStyle: 'linear',
   showErrorStates: false,
 };
 
@@ -154,7 +166,11 @@ function readPersisted(): Scenario {
         ? parsed.canvasMode
         : DEFAULT_SCENARIO.canvasMode;
     const showErrorStates: boolean = parsed.showErrorStates === true;
-    return { templateScope, reportListState, features, sidebarMode, canvasMode, showErrorStates };
+    const chartCurveStyle: ChartCurveStyle =
+      parsed.chartCurveStyle === 'linear' || parsed.chartCurveStyle === 'monotone'
+        ? parsed.chartCurveStyle
+        : DEFAULT_SCENARIO.chartCurveStyle;
+    return { templateScope, reportListState, features, sidebarMode, canvasMode, chartCurveStyle, showErrorStates };
   } catch {
     return DEFAULT_SCENARIO;
   }
@@ -185,6 +201,7 @@ export function useScenario(): [Scenario, (next: Scenario) => void] {
       persisted.features.sorting !== DEFAULT_SCENARIO.features.sorting ||
       persisted.sidebarMode !== DEFAULT_SCENARIO.sidebarMode ||
       persisted.canvasMode !== DEFAULT_SCENARIO.canvasMode ||
+      persisted.chartCurveStyle !== DEFAULT_SCENARIO.chartCurveStyle ||
       persisted.showErrorStates !== DEFAULT_SCENARIO.showErrorStates;
     if (differs) {
       setScenarioState(persisted);

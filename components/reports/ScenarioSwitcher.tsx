@@ -29,6 +29,7 @@ import type {
   ScenarioFeatures,
   SidebarMode,
   CanvasMode,
+  ChartCurveStyle,
   TemplateScope,
 } from '@/lib/scenario';
 import { cn } from '@/lib/utils';
@@ -96,6 +97,13 @@ const CANVAS_MODES: Option<CanvasMode>[] = [
   { id: 'grey',  label: 'Grey background', description: 'Modules on the page background', hint: 'card removed; modules sit on the page grey directly' },
 ];
 
+// Chart curve interpolation — flips every time-series Area / Line
+// between straight (linear) and smooth (monotone) segments.
+const CHART_CURVE_STYLES: Option<ChartCurveStyle>[] = [
+  { id: 'linear',   label: 'Linear',   description: 'Sharp, straight segments between points', hint: 'new design system default; matches Figma comps' },
+  { id: 'monotone', label: 'Monotone', description: 'Smooth Bezier curve between points',      hint: 'older render style; softer overall feel' },
+];
+
 // Error-state master toggle.  Off by default so reviewers see the
 // calm-state production view; flipping on reveals every profile-
 // driven warning surface (global banner + per-module icons +
@@ -155,6 +163,11 @@ export function ScenarioSwitcher({
     onChange({ ...scenario, showErrorStates: !scenario.showErrorStates });
   };
 
+  const handleChartCurveStyle = (next: ChartCurveStyle) => {
+    if (next === scenario.chartCurveStyle) return;
+    onChange({ ...scenario, chartCurveStyle: next });
+  };
+
   return createPortal(
     <div
       // Full-viewport overlay — neither participates in page layout
@@ -175,6 +188,7 @@ export function ScenarioSwitcher({
           onFeatureToggle={handleFeatureToggle}
           onSidebarMode={handleSidebarMode}
           onCanvasMode={handleCanvasMode}
+          onChartCurveStyle={handleChartCurveStyle}
           onErrorStatesToggle={handleErrorStatesToggle}
           currentPage={currentPage}
           onCollapse={() => setOpen(false)}
@@ -231,6 +245,7 @@ interface ExpandedPanelProps {
   onFeatureToggle: (key: keyof ScenarioFeatures) => void;
   onSidebarMode: (next: SidebarMode) => void;
   onCanvasMode: (next: CanvasMode) => void;
+  onChartCurveStyle: (next: ChartCurveStyle) => void;
   onErrorStatesToggle: () => void;
   currentPage: ScenarioCurrentPage;
   onCollapse: () => void;
@@ -243,6 +258,7 @@ function ExpandedPanel({
   onFeatureToggle,
   onSidebarMode,
   onCanvasMode,
+  onChartCurveStyle,
   onErrorStatesToggle,
   currentPage,
   onCollapse,
@@ -501,6 +517,25 @@ function ExpandedPanel({
                 hint={opt.hint}
                 onChange={() => onCanvasMode(opt.id)}
                 name="canvas-mode"
+              />
+            ))}
+          </SubGroup>
+
+          {/* Chart curve — flips every time-series Area / Line
+              between straight (linear) and smooth (monotone)
+              segments.  Default is linear to match the new design
+              system. */}
+          <SubGroup title="Chart curve">
+            {CHART_CURVE_STYLES.map((opt) => (
+              <OptionRow
+                key={opt.id}
+                kind="radio"
+                checked={scenario.chartCurveStyle === opt.id}
+                label={opt.label}
+                description={opt.description}
+                hint={opt.hint}
+                onChange={() => onChartCurveStyle(opt.id)}
+                name="chart-curve-style"
               />
             ))}
           </SubGroup>

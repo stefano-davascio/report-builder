@@ -24,6 +24,12 @@ import {
   ALL_PROFILES,
 } from '@/lib/profile-data';
 import { maskProfileStatuses } from '@/lib/profile-status';
+import {
+  DateRangeDropdown,
+  formatDateRangeLabel,
+  type DateRange,
+  type DateRangePreset,
+} from './DateRangeDropdown';
 import { ProfileAvatar } from './ProfileAvatar';
 import { ProfileAvatarSquare } from './ProfileAvatarSquare';
 import { PlatformIcon } from './PlatformIcon';
@@ -537,7 +543,7 @@ function SelectProfilesDropdown({
                       network glyph and the label text per Figma. */}
                   <button
                     onClick={() => onToggleGroup(group.platform)}
-                    className="flex items-center gap-[6px] w-full px-[8px] py-[10px] rounded-[4px] hover:bg-[rgba(81,61,217,0.1)] transition-colors text-left"
+                    className="flex items-center gap-[6px] w-full px-[8px] py-[10px] rounded-[4px] hover:bg-[rgba(32,30,36,0.05)] transition-colors text-left"
                   >
                     {/* `flex items-center` collapses the wrapper to
                         the checkbox's exact 24-px height — without
@@ -575,7 +581,7 @@ function SelectProfilesDropdown({
                       <button
                         key={profile.id}
                         onClick={() => onToggleProfile(profile.id)}
-                        className="flex items-center gap-[6px] w-full pl-[16px] pr-[8px] py-[10px] rounded-[4px] hover:bg-[rgba(81,61,217,0.1)] transition-colors text-left"
+                        className="flex items-center gap-[6px] w-full pl-[16px] pr-[8px] py-[10px] rounded-[4px] hover:bg-[rgba(32,30,36,0.05)] transition-colors text-left"
                       >
                         <div className="flex items-center flex-shrink-0">
                           <Checkbox state={profileCheckState} />
@@ -601,7 +607,7 @@ function SelectProfilesDropdown({
       <div className="flex items-center justify-end pl-[24px] pr-[8px] py-[4px] bg-white border-t border-[#F3F3F4] flex-shrink-0">
         <button
           onClick={onSelectAll}
-          className="flex items-center h-[24px] px-[8px] py-[6px] rounded-[60px] hover:bg-[rgba(81,61,217,0.1)] transition-colors"
+          className="flex items-center h-[24px] px-[8px] py-[6px] rounded-[60px] hover:bg-[rgba(32,30,36,0.05)] transition-colors"
           style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
         >
           <span className="text-[12px] font-medium text-[#513DD9]" style={{ lineHeight: '12px' }}>
@@ -957,7 +963,50 @@ export function ProfileSelectionBar({
         </div>
       </div>
 
+      <DateRangeTrigger />
+    </div>
+  );
+}
+
+// ─── Date-range trigger + dropdown ────────────────────────────────────────
+//
+// Owns its own preset state because the parent currently doesn't
+// consume the range value — the picker is wired for design parity
+// with Figma 2173:48164 and can be promoted to a controlled prop
+// (e.g. `value` + `onChange`) once the rest of the app needs to
+// react to range changes.
+function DateRangeTrigger() {
+  const [open, setOpen] = useState(false);
+  const [preset, setPreset] = useState<DateRangePreset>('custom');
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // Custom-range memory.  Default seeds with the existing 11–25
+  // Mar 2026 placeholder so the calendar bootstraps with a
+  // visible selection.  Replaced once the user picks a new range
+  // from the calendar; persists across open/close so reopening
+  // the picker paints the same days.
+  const [customRange, setCustomRange] = useState<DateRange>({
+    start: new Date(2026, 2, 11),
+    end: new Date(2026, 2, 25),
+  });
+
+  // Trigger label tracks the active preset.  For `'custom'` we
+  // surface the formatted date range; for the relative presets we
+  // surface their short text so the trigger button doubles as a
+  // "what's selected" readout.
+  const triggerLabel =
+    preset === '7d'  ? 'Last 7 days' :
+    preset === '30d' ? 'Last 30 days' :
+    preset === '60d' ? 'Last 60 days' :
+    formatDateRangeLabel(customRange);
+
+  return (
+    <>
       <button
+        ref={buttonRef}
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
         className="flex items-center gap-[6px] h-[32px] px-[12px] bg-white border border-[#D2D2D3] rounded-[4px] hover:bg-[#F3F3F4] transition-colors flex-shrink-0 ml-auto"
       >
         <IconCalendar size={16} color="#4C4B4F" />
@@ -965,10 +1014,20 @@ export function ProfileSelectionBar({
           className="text-[#201E24] whitespace-nowrap"
           style={{ fontSize: 12, fontFamily: 'IBM Plex Sans, sans-serif' }}
         >
-          11 Mar, 2026 - 25 Mar, 2026
+          {triggerLabel}
         </span>
         <IconChevronDown size={16} color="#4C4B4F" />
       </button>
-    </div>
+      {open && (
+        <DateRangeDropdown
+          anchorRef={buttonRef}
+          value={preset}
+          customRange={customRange}
+          onChange={setPreset}
+          onCustomRangeChange={setCustomRange}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
   );
 }

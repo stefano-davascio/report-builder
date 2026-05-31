@@ -20,7 +20,7 @@
  * every other chart, so visual changes there propagate here too.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ScatterChart, Scatter, Cell, XAxis, YAxis, ZAxis,
   CartesianGrid, ReferenceLine, Tooltip, ResponsiveContainer,
@@ -195,6 +195,20 @@ export function FollowersOnlineModule({
 }: FollowersOnlineModuleProps) {
   const chartH = Math.max(contentHeight - LEGEND_RESERVE, 220);
 
+  // Crosshair hover state — tracks the {day, hour} the user is
+  // pointing at so we can hide every cell that isn't in the same
+  // row OR column.  `cx` / `cy` are the hovered point's pixel
+  // coordinates inside the chart, used to position the tooltip
+  // directly over the bubble (default Recharts behavior anchored
+  // to (0,0) on ScatterChart because `cursor={false}` strips the
+  // active-coordinate fallback).
+  const [hovered, setHovered] = useState<{
+    day: number;
+    hour: number;
+    cx: number;
+    cy: number;
+  } | null>(null);
+
   // Decorate every point with row coordinate + a normalized intensity
   // `t` in [0,1] used both for the cell fill and the tooltip swatch.
   // `maxValue` is the legend's logical top (16k) so the ramp & legend
@@ -295,13 +309,76 @@ export function FollowersOnlineModule({
               range={[18, 600]}
             />
             <Tooltip
-              cursor={{ stroke: '#C4C3C6', strokeDasharray: '3 3' }}
+              // Suppress the dashed crosshair cursor — the bubble
+              // crosshair highlight (Cell hide) carries the
+              // row/column callout already, so an extra dashed
+              // line reads as visual noise.
+              cursor={false}
               content={<FollowersTooltip />}
+              // Pin the tooltip directly over the hovered bubble.
+              // Without `position`, Recharts ScatterChart anchors
+              // the tooltip to (0,0) (top-left of the plot) when
+              // `cursor={false}` strips the active-coordinate
+              // fallback; passing the bubble's `cx` / `cy` puts
+              // the card right on the cell instead.  Offset
+              // slightly up-right so the tooltip nose doesn't
+              // overlap the bubble itself.
+              position={
+                hovered ? { x: hovered.cx + 12, y: hovered.cy - 12 } : undefined
+              }
             />
-            <Scatter data={decorated} isAnimationActive={false}>
+            {/* Mouse hover on individual `<Scatter>` points fires
+                `onMouseEnter` with the raw data payload — that's how
+                we get the hovered `{day, hour}` for the crosshair
+                highlight.  `onMouseLeave` clears it so the dim
+                state ends when the cursor leaves the chart. */}
+            <Scatter
+              data={decorated}
+              isAnimationActive={false}
+              onMouseEnter={(item) => {
+                // Recharts' Scatter passes a `ScatterPointItem`
+                // whose `.payload` is the raw data row we fed in
+                // (the `decorated` entry) and whose `.cx` / `.cy`
+                // are the bubble's pixel coordinates inside the
+                // chart.  We pull both: payload drives the
+                // crosshair (`day` + `hour`), coordinates drive
+                // the tooltip's anchored position.
+                const p = item.payload as { day?: number; hour?: number } | undefined;
+                if (
+                  p &&
+                  typeof p.day === 'number' &&
+                  typeof p.hour === 'number' &&
+                  typeof item.cx === 'number' &&
+                  typeof item.cy === 'number'
+                ) {
+                  setHovered({ day: p.day, hour: p.hour, cx: item.cx, cy: item.cy });
+                }
+              }}
+              onMouseLeave={() => setHovered(null)}
+            >
               {decorated.map((p, i) => {
                 const c = colorRamp(p.t);
-                return <Cell key={i} fill={c} stroke={c} fillOpacity={1} />;
+                // Crosshair highlight — when a cell is hovered, any
+                // cell NOT sharing its day OR hour is hidden
+                // entirely (opacity 0) so only the active row +
+                // column remain visible.  `pointer-events: none` on
+                // the hidden cells means cursor movements through
+                // their footprint don't re-trigger hover and shift
+                // the crosshair to a different row/column.
+                const hidden =
+                  hovered !== null &&
+                  p.day !== hovered.day &&
+                  p.hour !== hovered.hour;
+                return (
+                  <Cell
+                    key={i}
+                    fill={c}
+                    stroke={c}
+                    fillOpacity={hidden ? 0 : 1}
+                    strokeOpacity={hidden ? 0 : 1}
+                    style={hidden ? { pointerEvents: 'none' } : undefined}
+                  />
+                );
               })}
             </Scatter>
           </ScatterChart>

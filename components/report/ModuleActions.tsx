@@ -378,7 +378,7 @@ export function DropdownItem({
         type="button"
         onClick={onClick}
         onMouseDown={(e) => e.stopPropagation()}
-        className="flex items-center gap-4 h-10 px-4 py-2 rounded-[4px] hover:bg-[#EDEAFF] transition-colors w-full"
+        className="flex items-center gap-4 h-10 px-4 py-2 rounded-[4px] hover:bg-[rgba(32,30,36,0.05)] transition-colors w-full"
       >
         <span className="flex-shrink-0 flex items-center justify-center text-[#4C4B4F]">
           {icon}

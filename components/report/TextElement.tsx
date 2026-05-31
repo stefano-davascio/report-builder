@@ -498,7 +498,7 @@ function Toolbar({
             setStyleOpen((v) => !v);
           }}
           className={cn(
-            'flex items-center gap-1 p-1 rounded-[4px] hover:bg-[rgba(81,61,217,0.1)] transition-colors',
+            'flex items-center gap-1 p-1 rounded-[4px] hover:bg-[rgba(32,30,36,0.05)] transition-colors',
             styleOpen && 'bg-[rgba(81,61,217,0.1)]',
           )}
           aria-label="Text style"
@@ -549,7 +549,7 @@ function Toolbar({
                       setStyleOpen(false);
                     }}
                     className={cn(
-                      'w-full h-10 flex items-center gap-4 px-4 py-2 rounded-[4px] text-left text-[#201E24] transition-colors hover:bg-[rgba(81,61,217,0.1)]',
+                      'w-full h-10 flex items-center gap-4 px-4 py-2 rounded-[4px] text-left text-[#201E24] transition-colors hover:bg-[rgba(32,30,36,0.05)]',
                       selected && 'bg-[rgba(81,61,217,0.1)]',
                     )}
                     style={{
@@ -706,7 +706,7 @@ function LinkPopover({
           type="button"
           onMouseDown={(e) => e.preventDefault()}
           onClick={onRemove}
-          className="h-8 px-3 rounded-[4px] text-[#201E24] text-[14px] hover:bg-[rgba(81,61,217,0.1)] transition-colors"
+          className="h-8 px-3 rounded-[4px] text-[#201E24] text-[14px] hover:bg-[rgba(32,30,36,0.05)] transition-colors"
           style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
         >
           Remove
@@ -740,7 +740,7 @@ function ToolbarIconButton({
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       className={cn(
-        'flex items-center justify-center p-1 rounded-[4px] transition-colors hover:bg-[rgba(81,61,217,0.1)]',
+        'flex items-center justify-center p-1 rounded-[4px] transition-colors hover:bg-[rgba(32,30,36,0.05)]',
         active && 'bg-[rgba(81,61,217,0.1)]',
       )}
     >
@@ -807,7 +807,7 @@ function EmojiSuggestionDropdown({
             'w-full flex items-center gap-2 px-3 h-8 text-left text-[14px] text-[#201E24] transition-colors',
             i === highlightedIndex
               ? 'bg-[rgba(81,61,217,0.1)]'
-              : 'hover:bg-[rgba(81,61,217,0.05)]',
+              : 'hover:bg-[rgba(32,30,36,0.05)]',
           )}
           style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
         >

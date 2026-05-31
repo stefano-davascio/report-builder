@@ -111,54 +111,94 @@ function presetInstagramOnly(): ReportModule[] {
 // self-contained: a future catalog tweak shouldn't silently change
 // what a saved TikTok report renders as.
 function presetTikTokOnly(): ReportModule[] {
+  // Canonical TikTok layout, ordered per the user's spec:
+  //
+  //    1.  Profile Views                  (metric, w=1)
+  //    2.  Followers                      (metric, w=1)
+  //    3.  Video Views                    (metric, w=1)
+  //    4.  Interactions                   (metric, w=1)
+  //    5.  Net followers                  (metric, w=1, wraps to row 1)
+  //    6.  Audience Growth                (area,   w=4)
+  //    7.  Publishing behaviour           (bubble, w=2)  ──┐ paired
+  //    8.  Followers online               (bubble, w=2)  ──┘
+  //    9.  Best performing day summary    (list,   w=2)  ──┐ paired
+  //   10.  Followers online summary       (list,   w=2)  ──┘
+  //   11.  Video views by day             (area,   w=2)  ──┐ paired
+  //   12.  Interactions by day            (bar,    w=2)  ──┘
+  //   13.  Best performing day            (list,   w=2)  ──┐ paired
+  //   14.  Best engaging day              (list,   w=2)  ──┘
+  //   15.  Video engagement               (list,   w=4)
+  //   16.  Video watch metrics            (list,   w=4)
+  //   17.  Video sources                  (list,   w=4)
+  //   18.  Audience by gender             (pie,    w=2)  ──┐ paired
+  //   19.  Audience by country            (list,   w=2)  ──┘
+  //
+  // Y values use OLD-units (1 Figma cell = 6 grid rows); they get
+  // converted to NEW-units by `scaleChartLayout` at the bottom.
   const modules: ReportModule[] = [
-    // Row 0 (y=0, h=6) — TikTok-specific KPI strip across the top.
-    { id: 'mod-tt-video-views',    definitionId: 'tiktok-video-views',    chartType: 'metric',
-      layout: { i: 'mod-tt-video-views',    x: 0, y: 0, w: 1, h: 6, minW: 1, minH: 6 } },
+    // Row 0 (y=0, h=6) — KPI strip across the top.
     { id: 'mod-tt-profile-views',  definitionId: 'tiktok-profile-views',  chartType: 'metric',
-      layout: { i: 'mod-tt-profile-views',  x: 1, y: 0, w: 1, h: 6, minW: 1, minH: 6 } },
-    { id: 'mod-tt-likes',          definitionId: 'tiktok-likes',          chartType: 'metric',
-      layout: { i: 'mod-tt-likes',          x: 2, y: 0, w: 1, h: 6, minW: 1, minH: 6 } },
-    { id: 'mod-tt-comments',       definitionId: 'tiktok-comments',       chartType: 'metric',
-      layout: { i: 'mod-tt-comments',       x: 3, y: 0, w: 1, h: 6, minW: 1, minH: 6 } },
+      layout: { i: 'mod-tt-profile-views',  x: 0, y: 0, w: 1, h: 6, minW: 1, minH: 6 } },
+    { id: 'mod-tt-followers',      definitionId: 'tiktok-followers',      chartType: 'metric',
+      layout: { i: 'mod-tt-followers',      x: 1, y: 0, w: 1, h: 6, minW: 1, minH: 6 } },
+    { id: 'mod-tt-video-views',    definitionId: 'tiktok-video-views',    chartType: 'metric',
+      layout: { i: 'mod-tt-video-views',    x: 2, y: 0, w: 1, h: 6, minW: 1, minH: 6 } },
+    { id: 'mod-tt-interactions',   definitionId: 'tiktok-interactions',   chartType: 'metric',
+      layout: { i: 'mod-tt-interactions',   x: 3, y: 0, w: 1, h: 6, minW: 1, minH: 6 } },
 
-    // Row 1 (y=6, h=6) — Audience headline metric. `followers` is the
-    // cross-network module that renders a single headline number; on
-    // TikTok it's the audience-size KPI. Sits at x=0 as the lead-in
-    // for the demographic breakdowns immediately below it.
-    { id: 'mod-tt-followers',      definitionId: 'followers',             chartType: 'metric',
-      layout: { i: 'mod-tt-followers',      x: 0, y: 6, w: 1, h: 6, minW: 1, minH: 6 } },
+    // Row 1 (y=6, h=6) — Net followers wraps below the row-0 strip.
+    { id: 'mod-tt-net-followers',  definitionId: 'tiktok-net-followers',  chartType: 'metric',
+      layout: { i: 'mod-tt-net-followers',  x: 0, y: 6, w: 1, h: 6, minW: 1, minH: 6 } },
 
-    // Row 2 (y=12, h=18) — audience demographics: gender pie next to
-    // country list. Country defaultH is 24 in the catalog; we trim to
-    // 18 here so the row reads as an even pair.
-    { id: 'mod-tt-aud-gender',     definitionId: 'audience-by-gender',    chartType: 'pie',
-      layout: { i: 'mod-tt-aud-gender',     x: 0, y: 12, w: 2, h: 18, minW: 1, minH: 12 } },
-    { id: 'mod-tt-aud-country',    definitionId: 'audience-by-country',   chartType: 'list',
-      layout: { i: 'mod-tt-aud-country',    x: 2, y: 12, w: 2, h: 18, minW: 1, minH: 12 } },
+    // Row 2 (y=12, h=18) — Audience Growth full-width, TikTok blue.
+    { id: 'mod-tt-aud-growth',     definitionId: 'audience-growth',       chartType: 'area',
+      network: 'tiktok',
+      layout: { i: 'mod-tt-aud-growth',     x: 0, y: 12, w: 4, h: 18, minW: 1, minH: 12 } },
 
-    // Row 3 (y=30, h=18) — daily-trend chart pair.
-    { id: 'mod-tt-views-by-day',   definitionId: 'tiktok-video-views-by-day',    chartType: 'area',
-      layout: { i: 'mod-tt-views-by-day',   x: 0, y: 30, w: 2, h: 18, minW: 1, minH: 12 } },
-    { id: 'mod-tt-inter-by-day',   definitionId: 'tiktok-interactions-by-day',   chartType: 'bar',
-      layout: { i: 'mod-tt-inter-by-day',   x: 2, y: 30, w: 2, h: 18, minW: 1, minH: 12 } },
+    // Row 3 (y=30, h=18) — activity-pattern pair (bubble grids).
+    { id: 'mod-tt-publishing',         definitionId: 'tiktok-publishing-behaviour', chartType: 'bubble',
+      layout: { i: 'mod-tt-publishing',         x: 0, y: 30, w: 2, h: 18, minW: 1, minH: 12 } },
+    { id: 'mod-tt-followers-online',   definitionId: 'tiktok-followers-online',     chartType: 'bubble',
+      layout: { i: 'mod-tt-followers-online',   x: 2, y: 30, w: 2, h: 18, minW: 1, minH: 12 } },
 
-    // Row 4 (y=48, h=12) — summary cards directly under each daily trend.
-    // Best performing day pairs with views-by-day (same x=0); best
-    // engaging day pairs with interactions-by-day (same x=2).
-    { id: 'mod-tt-best-perf',      definitionId: 'tiktok-best-performing-day',   chartType: 'list',
-      layout: { i: 'mod-tt-best-perf',      x: 0, y: 48, w: 2, h: 12, minW: 1, minH: 12 } },
-    { id: 'mod-tt-best-eng',       definitionId: 'tiktok-best-engaging-day',     chartType: 'list',
-      layout: { i: 'mod-tt-best-eng',       x: 2, y: 48, w: 2, h: 12, minW: 1, minH: 12 } },
+    // Row 4 (y=48, h=18) — summary list pair.
+    { id: 'mod-tt-best-perf-summary',  definitionId: 'tiktok-best-performing-day-summary', chartType: 'list',
+      layout: { i: 'mod-tt-best-perf-summary',  x: 0, y: 48, w: 2, h: 18, minW: 1, minH: 12 } },
+    { id: 'mod-tt-fol-online-summary', definitionId: 'tiktok-followers-online-summary',    chartType: 'list',
+      layout: { i: 'mod-tt-fol-online-summary', x: 2, y: 48, w: 2, h: 18, minW: 1, minH: 12 } },
 
-    // Row 5 (y=60, h=18) — publishing-behaviour bubble grid next to
-    // followers-online heatmap. Both are activity-pattern charts.
-    { id: 'mod-tt-publishing',       definitionId: 'tiktok-publishing-behaviour', chartType: 'bubble',
-      layout: { i: 'mod-tt-publishing',       x: 0, y: 60, w: 2, h: 18, minW: 1, minH: 12 } },
-    { id: 'mod-tt-followers-online', definitionId: 'tiktok-followers-online',     chartType: 'bubble',
-      layout: { i: 'mod-tt-followers-online', x: 2, y: 60, w: 2, h: 18, minW: 1, minH: 12 } },
-    // Row 6 (top-videos table) intentionally absent — pending a fresh
-    // Figma spec. See the rationale comment above the function.
+    // Row 5 (y=66, h=18) — daily-trend pair.
+    { id: 'mod-tt-views-by-day',       definitionId: 'tiktok-video-views-by-day',   chartType: 'area',
+      layout: { i: 'mod-tt-views-by-day',       x: 0, y: 66, w: 2, h: 18, minW: 1, minH: 12 } },
+    { id: 'mod-tt-inter-by-day',       definitionId: 'tiktok-interactions-by-day',  chartType: 'bar',
+      layout: { i: 'mod-tt-inter-by-day',       x: 2, y: 66, w: 2, h: 18, minW: 1, minH: 12 } },
+
+    // Row 6 (y=84, h=12) — best-day summary-card pair.
+    { id: 'mod-tt-best-perf',          definitionId: 'tiktok-best-performing-day',  chartType: 'list',
+      layout: { i: 'mod-tt-best-perf',          x: 0, y: 84, w: 2, h: 12, minW: 1, minH: 12 } },
+    { id: 'mod-tt-best-eng',           definitionId: 'tiktok-best-engaging-day',    chartType: 'list',
+      layout: { i: 'mod-tt-best-eng',           x: 2, y: 84, w: 2, h: 12, minW: 1, minH: 12 } },
+
+    // Rows 7–9 (y=96 / 120 / 144, h=24 each) — video carousels
+    // stacked full-width.  Video engagement renders the Figma
+    // 2222:40922 240×479 card strip; watch metrics + sources are
+    // still on the legacy ListModule render until their dedicated
+    // components land.  h=24 gives ~546 px usable height — enough
+    // for the 479 px card + 16 px footer gap + ~36 px footer with
+    // a tiny breathing margin.
+    { id: 'mod-tt-vid-engagement',     definitionId: 'tiktok-video-engagement',     chartType: 'list',
+      layout: { i: 'mod-tt-vid-engagement',     x: 0, y: 96,  w: 4, h: 24, minW: 1, minH: 18 } },
+    { id: 'mod-tt-vid-watch-metrics',  definitionId: 'tiktok-video-watch-metrics',  chartType: 'list',
+      layout: { i: 'mod-tt-vid-watch-metrics',  x: 0, y: 120, w: 4, h: 24, minW: 1, minH: 18 } },
+    { id: 'mod-tt-vid-sources',        definitionId: 'tiktok-video-sources',        chartType: 'list',
+      layout: { i: 'mod-tt-vid-sources',        x: 0, y: 144, w: 4, h: 24, minW: 1, minH: 18 } },
+
+    // Row 10 (y=168, h=18) — audience demographics pair (closes the
+    // template).
+    { id: 'mod-tt-aud-gender',         definitionId: 'audience-by-gender',          chartType: 'pie',
+      layout: { i: 'mod-tt-aud-gender',         x: 0, y: 168, w: 2, h: 18, minW: 1, minH: 12 } },
+    { id: 'mod-tt-aud-country',        definitionId: 'audience-by-country',         chartType: 'list',
+      layout: { i: 'mod-tt-aud-country',        x: 2, y: 168, w: 2, h: 18, minW: 1, minH: 12 } },
   ];
   // `app/page.tsx` calls `reissueModuleIds(template.modules())` on
   // template click so each spawned report gets fresh ids — the literal

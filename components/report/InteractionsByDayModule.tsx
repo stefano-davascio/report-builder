@@ -19,11 +19,10 @@
  * (`MOCK_INTERACTIONS_BY_DAY` in `lib/mock-data.ts`).
  */
 
-import { useMemo } from 'react';
 import {
   BarChart, Bar, AreaChart, Area, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, LabelList,
+  ResponsiveContainer,
 } from 'recharts';
 import { MockProfile } from '@/lib/profile-data';
 import { ModuleNetworks } from './ModuleNetworks';
@@ -39,6 +38,7 @@ import {
   COMPACT_NETWORKS_THRESHOLD_PX,
 } from './AudienceGrowthModule';
 import { renderTimeSeriesXTick } from './timeSeriesChrome';
+import { useChartCurveStyle } from '@/lib/chart-style-context';
 
 // ── Series + colors (shared) ──────────────────────────────────────────────
 // Order in this array is the **render order**:
@@ -50,17 +50,24 @@ import { renderTimeSeriesXTick } from './timeSeriesChrome';
 // `subtle` is the area-fill token paired with each `color` stroke —
 // matched to the AudienceGrowth palette so the visual language is
 // consistent across the report.
+// TikTok all-blue palette per Figma 2219:39079.  Stack order (bottom
+// → top) is preserved (Shares → Comments → Likes); the three tones
+// step from darkest (Shares, base of the stack) to lightest (Likes,
+// cap).  `subtle` is the area-fill paired with the matching stroke
+// for the line / area variants.
 export const SERIES = [
-  { key: 'shares',   label: 'Shares',   color: '#3FA40D', subtle: '#D7F7C2' },
-  { key: 'comments', label: 'Comments', color: '#0075DB', subtle: '#CFF5F6' },
-  { key: 'likes',    label: 'Likes',    color: '#ED6704', subtle: '#FCEDB9' },
+  { key: 'shares',   label: 'Shares',   color: '#0050B8', subtle: '#9EC6EA' },
+  { key: 'comments', label: 'Comments', color: '#0570DE', subtle: '#A8CEEC' },
+  { key: 'likes',    label: 'Likes',    color: '#7CB5EB', subtle: '#CFE4F7' },
 ] as const;
 
 type SeriesKey = (typeof SERIES)[number]['key'];
 
 // ── Bar-variant data shape ────────────────────────────────────────────────
+// Renamed `day` → `date` per Figma 2219:39079 (x-axis labels are now
+// calendar dates like "Mar 4" / "Apr 1" instead of weekday letters).
 export interface InteractionsByDayRow {
-  day: string; // e.g. "Mon"
+  date: string; // e.g. "Mar 4"
   shares: number;
   comments: number;
   likes: number;
@@ -133,7 +140,7 @@ function InteractionsBarTooltip({ active, payload }: {
   // the same visual order as the stacked bar (Likes at top of stack).
   const ordered = [...SERIES].reverse();
   return (
-    <ModuleTooltipCard title={row.day}>
+    <ModuleTooltipCard title={row.date}>
       {ordered.map((s) => (
         <ModuleTooltipRow
           key={s.key}
@@ -205,11 +212,12 @@ interface InteractionsByDayModuleProps {
   profiles?: MockProfile[];
 }
 
-// Y-axis is pinned to a fixed `[0, 260]` ladder with 20-step ticks so
-// the stacked totals match the Figma exactly regardless of the data
-// peak. Generated once at module level since the ticks never change.
-const BAR_Y_DOMAIN: [number, number] = [0, 260];
-const BAR_Y_TICKS = Array.from({ length: 14 }, (_, i) => i * 20); // 0…260
+// Y-axis is pinned to a fixed `[0, 1000]` ladder with 100-step ticks
+// so the stacked totals match Figma 2219:39079 exactly regardless of
+// the data peak.  Generated once at module level since the ticks
+// never change.
+const BAR_Y_DOMAIN: [number, number] = [0, 1000];
+const BAR_Y_TICKS = Array.from({ length: 11 }, (_, i) => i * 100); // 0…1000
 
 export function InteractionsByDayModule({
   data,
@@ -218,21 +226,6 @@ export function InteractionsByDayModule({
   profiles = [],
 }: InteractionsByDayModuleProps) {
   const chartH = Math.max(contentHeight - LEGEND_RESERVE, 200);
-
-  // Pre-compute whether each segment is tall enough to fit a label.
-  // Recharts' default "drop labels that don't fit" logic only avoids
-  // overflowing the bar geometry; it still renders a label on a
-  // 4-px-tall slice and produces an unreadable smudge. We mirror its
-  // sizing math (segment value / domain × plot height) and gate label
-  // visibility ourselves at a 14-px legibility threshold.
-  const plotInnerH = chartH - 8 /* top margin */;
-  const minSegmentHForLabel = 14;
-  const showLabel = useMemo(() => {
-    return (_key: SeriesKey, value: number) => {
-      const segH = (value / BAR_Y_DOMAIN[1]) * plotInnerH;
-      return segH >= minSegmentHForLabel;
-    };
-  }, [plotInnerH]);
 
   // Rounded top corners for the **top** segment only (Likes — last
   // series in `SERIES`). Middle and bottom segments stay square so
@@ -255,7 +248,7 @@ export function InteractionsByDayModule({
           >
             <CartesianGrid stroke="#E8E8E9" strokeWidth={1} vertical={false} />
             <XAxis
-              dataKey="day"
+              dataKey="date"
               tickLine={false}
               axisLine={false}
               tickMargin={12}
@@ -284,6 +277,11 @@ export function InteractionsByDayModule({
               cursor={{ fill: 'rgba(196,195,198,0.18)' }}
               content={<InteractionsBarTooltip />}
             />
+            {/* Figma 2219:39079 removed the in-bar value labels —
+                each segment now renders as a flat colored block, with
+                the value surfaced via the hover tooltip + y-axis
+                ladder.  Simpler read, less crowding when bars are
+                slim. */}
             {SERIES.map((s, i) => {
               const isTop = i === SERIES.length - 1;
               return (
@@ -295,20 +293,7 @@ export function InteractionsByDayModule({
                   stackId="engagement"
                   radius={isTop ? TOP_RADIUS : FLAT_RADIUS}
                   isAnimationActive={false}
-                >
-                  <LabelList
-                    dataKey={s.key}
-                    position="center"
-                    formatter={(v) => {
-                      const n = typeof v === 'number' ? v : Number(v);
-                      if (!Number.isFinite(n)) return '';
-                      return showLabel(s.key as SeriesKey, n) ? n.toLocaleString() : '';
-                    }}
-                    fill="#FFFFFF"
-                    fontSize={12}
-                    fontFamily="IBM Plex Sans, sans-serif"
-                  />
-                </Bar>
+                />
               );
             })}
           </BarChart>
@@ -353,6 +338,7 @@ export function InteractionsByDayLineModule({
   contentWidth = 0,
   profiles = [],
 }: InteractionsByDayLineModuleProps) {
+  const curveType = useChartCurveStyle();
   const chartH = Math.max(contentHeight - LEGEND_RESERVE, 120);
   const yTickCount = pickYTickCount(chartH);
   const plotW = contentWidth > 0 ? contentWidth - Y_AXIS_W : 0;
@@ -388,7 +374,7 @@ export function InteractionsByDayLineModule({
             {SERIES.map((s) => (
               <Line
                 key={s.key}
-                type="monotone"
+                type={curveType}
                 dataKey={s.key}
                 name={s.label}
                 stroke={s.color}
@@ -419,6 +405,7 @@ export function InteractionsByDayAreaModule({
   contentWidth = 0,
   profiles = [],
 }: InteractionsByDayAreaModuleProps) {
+  const curveType = useChartCurveStyle();
   const chartH = Math.max(contentHeight - LEGEND_RESERVE, 120);
   const yTickCount = pickYTickCount(chartH);
   const plotW = contentWidth > 0 ? contentWidth - Y_AXIS_W : 0;
@@ -454,7 +441,7 @@ export function InteractionsByDayAreaModule({
             {SERIES.map((s) => (
               <Area
                 key={s.key}
-                type="monotone"
+                type={curveType}
                 dataKey={s.key}
                 name={s.label}
                 stroke={s.color}

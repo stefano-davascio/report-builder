@@ -32,6 +32,7 @@ import {
   InteractionsByDayAreaModule,
 } from './InteractionsByDayModule';
 import { SummaryCardModule } from './SummaryCardModule';
+import { VideoEngagementModule } from './VideoEngagementModule';
 import { ModuleActions } from './ModuleActions';
 import { cn } from '@/lib/utils';
 import {
@@ -46,6 +47,7 @@ import {
   MOCK_INTERACTIONS_BY_DAY,
   MOCK_BEST_ENGAGING_DAY_ROWS,
   MOCK_BEST_PERFORMING_DAY_ROWS,
+  MOCK_VIDEO_ENGAGEMENT_CARDS,
   CHART_COLORS,
 } from '@/lib/mock-data';
 
@@ -85,12 +87,15 @@ function getModuleContent(
 
   // Special case: Audience Growth uses a 3-series overlapping area chart
   // when in its default area mode (matches Figma frame 1026-38493).
+  // `network` flows through so the variant swaps to the TikTok all-
+  // blue gradient (Figma 2201:51879) when the module is bound to TikTok.
   if (definitionId === 'audience-growth' && chartType === 'area') {
     return (
       <AudienceGrowthModule
         contentHeight={contentHeight}
         contentWidth={contentWidth}
         profiles={profilesForModule}
+        network={module.network}
       />
     );
   }
@@ -104,6 +109,7 @@ function getModuleContent(
         contentHeight={contentHeight}
         contentWidth={contentWidth}
         profiles={profilesForModule}
+        network={module.network}
       />
     );
   }
@@ -117,6 +123,7 @@ function getModuleContent(
         contentHeight={contentHeight}
         contentWidth={contentWidth}
         profiles={profilesForModule}
+        network={module.network}
       />
     );
   }
@@ -191,6 +198,22 @@ function getModuleContent(
       return (
         <SummaryCardModule
           rows={MOCK_BEST_PERFORMING_DAY_ROWS}
+          contentWidth={contentWidth}
+          profiles={profilesForModule}
+        />
+      );
+    }
+    // Horizontally-scrolling video-card carousel (Figma 2222:40922).
+    // Bespoke renderer; not list-shaped despite living under
+    // `chartType === 'list'` for catalog/preset compatibility with
+    // the sister `tiktok-video-watch-metrics` / `tiktok-video-sources`
+    // entries (still on `ListModule` until their dedicated renderers
+    // land).
+    if (definitionId === 'tiktok-video-engagement') {
+      return (
+        <VideoEngagementModule
+          cards={MOCK_VIDEO_ENGAGEMENT_CARDS}
+          contentHeight={contentHeight}
           contentWidth={contentWidth}
           profiles={profilesForModule}
         />

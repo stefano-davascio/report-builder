@@ -38,6 +38,7 @@ import {
   TimeSeriesLegend,
   singleSeriesTooltipContent,
 } from './timeSeriesChrome';
+import { useChartCurveStyle } from '@/lib/chart-style-context';
 
 // Y-axis gutter matches the area chart (32 px so "1k" at 12 px fits).
 const Y_AXIS_W = 32;
@@ -76,6 +77,7 @@ export function TimeSeriesAreaModule({
   contentWidth = 0,
   profiles = [],
 }: TimeSeriesAreaModuleProps) {
+  const curveType = useChartCurveStyle();
   const chartH = Math.max(contentHeight - LEGEND_RESERVE, 120);
   const yTickCount = pickYTickCount(chartH);
   const plotW = contentWidth > 0 ? contentWidth - Y_AXIS_W : 0;
@@ -118,7 +120,7 @@ export function TimeSeriesAreaModule({
               cursor={{ stroke: '#C4C3C6', strokeDasharray: '3 3' }}
             />
             <Area
-              type="monotone"
+              type={curveType}
               dataKey="value"
               name={label}
               stroke={color}

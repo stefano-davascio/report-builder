@@ -24,7 +24,7 @@ import { MockProfile } from '@/lib/profile-data';
 import { ModuleNetworks } from './ModuleNetworks';
 import { ModuleTooltip } from './ModuleTooltip';
 import {
-  SERIES,
+  getSeries,
   DATA,
   formatYAxis,
   pickYTickCount,
@@ -40,6 +40,9 @@ interface AudienceGrowthBarModuleProps {
   contentHeight: number;
   contentWidth?: number;
   profiles?: MockProfile[];
+  /** Module network binding — drives the series palette (see
+   *  `AudienceGrowthModule` for the cross-network vs TikTok split). */
+  network?: string | null;
 }
 
 // Corner radius for the top of each bar. Bottom corners stay square
@@ -50,7 +53,9 @@ export function AudienceGrowthBarModule({
   contentHeight,
   contentWidth = 0,
   profiles = [],
+  network,
 }: AudienceGrowthBarModuleProps) {
+  const series = getSeries(network);
   const chartH = Math.max(contentHeight - LEGEND_RESERVE, 120);
   const yTickCount = pickYTickCount(chartH);
   const plotW = contentWidth > 0 ? contentWidth - 32 : 0;
@@ -124,7 +129,7 @@ export function AudienceGrowthBarModule({
               allowDecimals={false}
             />
             <Tooltip content={<ModuleTooltip />} cursor={{ fill: 'rgba(196,195,198,0.18)' }} />
-            {SERIES.map((s) => (
+            {series.map((s) => (
               <Bar
                 key={s.key}
                 dataKey={s.key}
@@ -150,7 +155,7 @@ export function AudienceGrowthBarModule({
           className="flex flex-wrap items-center"
           style={{ columnGap: pickSeriesGap(contentWidth), rowGap: 8 }}
         >
-          {SERIES.map((s) => (
+          {series.map((s) => (
             <div key={s.key} className="flex items-center gap-1">
               <span
                 className="inline-block w-3 h-3 rounded-full flex-shrink-0"

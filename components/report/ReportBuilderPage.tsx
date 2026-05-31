@@ -33,7 +33,8 @@ import {
   IconElements,
 } from '@/components/icons/FigmaIcons';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import type { SidebarMode, CanvasMode } from '@/lib/scenario';
+import type { SidebarMode, CanvasMode, ChartCurveStyle } from '@/lib/scenario';
+import { ChartStyleProvider } from '@/lib/chart-style-context';
 
 /**
  * Which panel surface is currently visible in the report builder.
@@ -244,6 +245,11 @@ interface ReportBuilderPageProps {
    *  directly on the page's `#F3F3F4` background.  Defaults to
    *  `'white'` for production parity. */
   canvasMode?: CanvasMode;
+  /** Chart curve interpolation — drives every time-series Area /
+   *  Line in the builder via `<ChartStyleProvider>` + the
+   *  `useChartCurveStyle()` hook.  Defaults to `'linear'` for
+   *  production parity with the new design system. */
+  chartCurveStyle?: ChartCurveStyle;
   /** Master toggle for the warning system — when `false` (default),
    *  every profile's `status` is masked to `null` at the consumer
    *  layer so the global banner / per-module icons / status pills
@@ -260,6 +266,7 @@ export function ReportBuilderPage({
   onSave: onSaveProp,
   sidebarMode = 'combined',
   canvasMode = 'white',
+  chartCurveStyle = 'linear',
   showErrorStates = false,
 }: ReportBuilderPageProps = {}) {
   // Normalize divider modules at construction time.  Earlier dividers
@@ -748,6 +755,7 @@ export function ReportBuilderPage({
   }, []);
 
   return (
+    <ChartStyleProvider curveStyle={chartCurveStyle}>
     <div className="flex flex-col h-screen bg-[#F3F3F4] overflow-hidden">
       {/* Header */}
       <ReportHeader
@@ -992,5 +1000,6 @@ export function ReportBuilderPage({
         </div>
       </div>
     </div>
+    </ChartStyleProvider>
   );
 }

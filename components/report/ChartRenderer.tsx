@@ -8,6 +8,7 @@ import {
 import { ChartType, MockDataPoint } from '@/types';
 import { CHART_COLORS } from '@/lib/mock-data';
 import { ModuleTooltip } from './ModuleTooltip';
+import { useChartCurveStyle } from '@/lib/chart-style-context';
 
 interface ChartRendererProps {
   chartType: ChartType;
@@ -39,6 +40,7 @@ export function ChartRenderer({
   secondaryColor = CHART_COLORS.secondary,
   showSecondary = false,
 }: ChartRendererProps) {
+  const curveType = useChartCurveStyle();
   const commonProps = {
     data,
     margin: { top: 4, right: 4, left: -20, bottom: 0 },
@@ -90,7 +92,7 @@ export function ChartRenderer({
           {axisProps.yAxis}
           {axisProps.tooltip}
           <Area
-            type="monotone"
+            type={curveType}
             dataKey="value"
             name="Value"
             stroke={color}
@@ -101,7 +103,7 @@ export function ChartRenderer({
           />
           {showSecondary && (
             <Area
-              type="monotone"
+              type={curveType}
               dataKey="value2"
               name="Value 2"
               stroke={secondaryColor}
@@ -125,7 +127,7 @@ export function ChartRenderer({
           {axisProps.yAxis}
           {axisProps.tooltip}
           <Line
-            type="monotone"
+            type={curveType}
             dataKey="value"
             name="Value"
             stroke={color}
@@ -135,7 +137,7 @@ export function ChartRenderer({
           />
           {showSecondary && (
             <Line
-              type="monotone"
+              type={curveType}
               dataKey="value2"
               name="Value 2"
               stroke={secondaryColor}

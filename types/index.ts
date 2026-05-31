@@ -164,3 +164,41 @@ export interface BubblePoint {
   hour: number;
   value: number;
 }
+
+// Carousel "video card" payload — Figma 2222:40922 (Video engagement)
+// and its sister modules.  Each card is a self-contained snapshot of
+// one post: profile chip, caption, thumbnail, and a 4-row metric
+// table.  The carousel-level modules
+// (`VideoEngagementModule` and its still-stubbed siblings
+// `tiktok-video-watch-metrics`, `tiktok-video-sources`) accept
+// `VideoCardData[]` and just iterate them — the metric set differs
+// per consumer, so the type stays shape-only (label / value pairs)
+// rather than naming specific columns.
+export interface VideoCardData {
+  id: string;
+  /** Pre-formatted timestamp e.g. "23 Sep 2024 - 10.34 AM".  Frozen
+   *  upstream so we don't drag i18n / Date formatting into the
+   *  presentation layer. */
+  date: string;
+  profile: {
+    /** Display name shown above the @handle. */
+    name: string;
+    /** With the leading @ already included, e.g. "@tenceclothier_ng". */
+    handle: string;
+    /** Single uppercase letter rendered inside the 32-px avatar
+     *  monogram square. */
+    monogram: string;
+  };
+  /** Free-text caption.  Truncated to 2 lines by the card renderer
+   *  via `-webkit-line-clamp`. */
+  caption: string;
+  /** CSS background value used as the thumbnail.  Use a
+   *  `linear-gradient(...)` per card so we don't need to ship a
+   *  binary asset per video — each card gets its own tint so the
+   *  strip visually reads as "different posts". */
+  thumbnail: string;
+  /** 4-row metric table.  Order is preserved as authored.  Sister
+   *  carousels (watch metrics, sources) supply their own
+   *  module-specific labels here. */
+  metrics: { label: string; value: string }[];
+}

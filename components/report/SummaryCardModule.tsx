@@ -31,10 +31,23 @@
 import { MockProfile } from '@/lib/profile-data';
 import { ModuleNetworks } from './ModuleNetworks';
 import { COMPACT_NETWORKS_THRESHOLD_PX } from './AudienceGrowthModule';
+import { IconTrendUp, IconTrendDown } from '@/components/icons/SendiIcons';
 
 export interface SummaryRow {
   label: string;
   value: string;
+  /**
+   * When set, the row's value renders with a trend chip:
+   *   • `'up'`   — green-filled circle + up-right arrow,
+   *                value text in `#006B43`.
+   *   • `'down'` — red-filled circle + down-left arrow,
+   *                value text in `#CE091C`.
+   * Used by the Growth row in best-performing / best-engaging day
+   * summaries (Figma 2208:52384, 2219:39350) so the direction reads
+   * at a glance instead of relying on parsing the leading sign of
+   * the value string.
+   */
+  trend?: 'up' | 'down';
 }
 
 interface SummaryCardModuleProps {
@@ -71,12 +84,30 @@ export function SummaryCardModule({
             >
               {row.label}
             </span>
-            <span
-              className="text-[#626165] tabular-nums text-right"
-              style={{ fontSize: 12, lineHeight: '18px' }}
-            >
-              {row.value}
-            </span>
+            {row.trend ? (
+              // Growth chip — Figma 2208:52384 / 2219:39350.  Icon
+              // is the same colored-circle glyph the MetricCard's
+              // comparison row uses (`IconTrendUp` / `IconTrendDown`)
+              // so all "value direction" indicators in the builder
+              // share one visual.  Value text color mirrors the
+              // chip's semantic tone.
+              <span
+                className={`flex items-center gap-[6px] tabular-nums whitespace-nowrap text-right ${
+                  row.trend === 'up' ? 'text-[#006B43]' : 'text-[#CE091C]'
+                }`}
+                style={{ fontSize: 12, lineHeight: '18px' }}
+              >
+                {row.trend === 'up' ? <IconTrendUp size={16} /> : <IconTrendDown size={16} />}
+                {row.value}
+              </span>
+            ) : (
+              <span
+                className="text-[#626165] tabular-nums text-right"
+                style={{ fontSize: 12, lineHeight: '18px' }}
+              >
+                {row.value}
+              </span>
+            )}
           </div>
         ))}
       </div>

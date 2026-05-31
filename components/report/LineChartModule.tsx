@@ -30,7 +30,7 @@ import { MockDataPoint } from '@/types';
 import { ModuleNetworks } from './ModuleNetworks';
 import { ModuleTooltip } from './ModuleTooltip';
 import {
-  SERIES,
+  getSeries,
   DATA,
   formatYAxis,
   pickYTickCount,
@@ -46,6 +46,7 @@ import {
   TimeSeriesLegend,
   singleSeriesTooltipContent,
 } from './timeSeriesChrome';
+import { useChartCurveStyle } from '@/lib/chart-style-context';
 
 // Y-axis gutter matches the area chart (32 px so "1k" at 12 px fits).
 const Y_AXIS_W = 32;
@@ -56,6 +57,9 @@ interface AudienceGrowthLineModuleProps {
   contentHeight: number;
   contentWidth?: number;
   profiles?: MockProfile[];
+  /** Module network binding — drives the series palette (see
+   *  `AudienceGrowthModule` for the cross-network vs TikTok split). */
+  network?: string | null;
 }
 
 /**
@@ -68,7 +72,10 @@ export function AudienceGrowthLineModule({
   contentHeight,
   contentWidth = 0,
   profiles = [],
+  network,
 }: AudienceGrowthLineModuleProps) {
+  const series = getSeries(network);
+  const curveType = useChartCurveStyle();
   const chartH = Math.max(contentHeight - LEGEND_RESERVE, 120);
   const yTickCount = pickYTickCount(chartH);
   const plotW = contentWidth > 0 ? contentWidth - Y_AXIS_W : 0;
@@ -105,10 +112,10 @@ export function AudienceGrowthLineModule({
                 shape (date title + one row per series). The `[dot]
                 date value` collapse only fits single-series charts. */}
             <Tooltip content={<ModuleTooltip />} cursor={{ stroke: '#C4C3C6', strokeDasharray: '3 3' }} />
-            {SERIES.map((s) => (
+            {series.map((s) => (
               <Line
                 key={s.key}
-                type="monotone"
+                type={curveType}
                 dataKey={s.key}
                 name={s.label}
                 stroke={s.color}
@@ -134,7 +141,7 @@ export function AudienceGrowthLineModule({
           className="flex flex-wrap items-center"
           style={{ columnGap: pickSeriesGap(contentWidth), rowGap: 8 }}
         >
-          {SERIES.map((s) => (
+          {series.map((s) => (
             <div key={s.key} className="flex items-center gap-1">
               <span
                 className="inline-block w-3 h-3 rounded-full flex-shrink-0"
@@ -190,6 +197,7 @@ export function TimeSeriesLineModule({
   contentWidth = 0,
   profiles = [],
 }: TimeSeriesLineModuleProps) {
+  const curveType = useChartCurveStyle();
   const chartH = Math.max(contentHeight - LEGEND_RESERVE, 120);
   const yTickCount = pickYTickCount(chartH);
   const plotW = contentWidth > 0 ? contentWidth - Y_AXIS_W : 0;
@@ -231,7 +239,7 @@ export function TimeSeriesLineModule({
               cursor={{ stroke: '#C4C3C6', strokeDasharray: '3 3' }}
             />
             <Line
-              type="monotone"
+              type={curveType}
               dataKey="value"
               name={label}
               stroke={color}

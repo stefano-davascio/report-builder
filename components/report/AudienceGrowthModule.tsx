@@ -42,15 +42,55 @@ import { MockProfile } from '@/lib/profile-data';
 import { ModuleNetworks } from './ModuleNetworks';
 import { ModuleTooltip } from './ModuleTooltip';
 import { renderTimeSeriesXTick } from './timeSeriesChrome';
+import { useChartCurveStyle } from '@/lib/chart-style-context';
 
-// Series + color tokens reused by the stacked-bar rendering of the same
-// module. Exported so `AudienceGrowthBarModule` picks up any future
-// palette/label change without drift.
-export const SERIES = [
+/** One series entry as consumed by the area / line / bar variants. */
+export interface SeriesSpec {
+  key: 'netFollowers' | 'followers' | 'profileViews';
+  label: string;
+  /** Stroke + legend-dot color. */
+  color: string;
+  /** Fill swatch used by the area / bar renderers (paler tint of `color`). */
+  subtle: string;
+}
+
+// Cross-network palette (Figma 1302:170369) — distinct hues so the
+// three overlapping series read as separate bands.  Used by every
+// `audience-growth` module not bound to a specific network.
+const SERIES_CROSS_NETWORK: SeriesSpec[] = [
   { key: 'netFollowers', label: 'Net followers', color: '#3FA40D', subtle: '#D7F7C2' },
   { key: 'followers',    label: 'Followers',     color: '#0570DE', subtle: '#CFF5F6' },
   { key: 'profileViews', label: 'Profile views', color: '#ED6704', subtle: '#FCEDB9' },
-] as const;
+];
+
+// TikTok palette (Figma 2201:51879) — single-hue blue gradient since
+// every series belongs to the same network.  Top band (Followers) is
+// the darkest, bottom band (Profile views) is the lightest, so the
+// stacked-area paint reads as a tonal staircase even when the bands
+// don't overlap perfectly.  Strokes are picked to be visible against
+// their own fill while still differentiating in the legend.
+const SERIES_TIKTOK: SeriesSpec[] = [
+  { key: 'netFollowers', label: 'Net followers', color: '#1F8DDC', subtle: '#9EC6EA' },
+  { key: 'followers',    label: 'Followers',     color: '#0570DE', subtle: '#5B9BD5' },
+  { key: 'profileViews', label: 'Profile views', color: '#7CB5EB', subtle: '#CFE4F7' },
+];
+
+/**
+ * Resolve which series palette to use for a given module network.
+ * `'tiktok'` swaps to the all-blue gradient; anything else falls
+ * back to the cross-network green/blue/orange tokens.
+ */
+export function getSeries(network?: string | null): SeriesSpec[] {
+  return network === 'tiktok' ? SERIES_TIKTOK : SERIES_CROSS_NETWORK;
+}
+
+/**
+ * Back-compat default export — old callers (sibling modules + tests)
+ * that imported `SERIES` directly still resolve to the cross-network
+ * palette without any code change.  New call sites should call
+ * `getSeries(module.network)` to pick the right tokens.
+ */
+export const SERIES = SERIES_CROSS_NETWORK;
 
 export type Row = {
   date: string;
@@ -59,13 +99,43 @@ export type Row = {
   profileViews: number;
 };
 
-// 31-day window (Mar 2 – Apr 1) to match Figma's x-axis labels.
+// 31-day window (Mar 2 – Apr 1) — hand-picked anchor values per
+// Figma 2201:51879 (TikTok comp).  The Figma comp shows visible
+// day-to-day jitter (sharp peaks at Mar 22 / Mar 30, a dip
+// mid-month, a final spike to ~1100 on Apr 1) which the linear
+// curve type renders as visibly angular segments.  Smooth
+// sine-generated data from the previous version made the linear
+// vs. monotone visual difference invisible because adjacent
+// days were too close in value for the interpolation choice to
+// matter — these anchors fix that by mirroring the comp's
+// proportions exactly.
 //
-// Series means anchored to the requested values: profile views ≈ 200,
-// followers ≈ 1091, net followers ≈ 1091. Variation is kept modest so
-// the curves hover around those centers rather than spiking past them
-// (the y-axis domain is sized to 1200 so the followers / net-followers
-// peaks have a comfortable ~10 % headroom).
+// Three series, three bands:
+//   • Followers     — top:    540 → 1100, with a Mar 22 peak ~890
+//   • Net followers — middle: 270 → 350,  with a Mar 30 dip to ~190
+//   • Profile views — bottom: 10–80, thin baseline near the x-axis
+//
+// Y-domain stays [0, 1200] so the followers ceiling has headroom
+// without re-sizing.
+const FOLLOWERS_ANCHORS = [
+  540, 580, 610, 650, 670, 680, 690, 695, 700, 700,
+  700, 720, 760, 810, 840, 870, 880, 890, 870, 860,
+  850, 830, 810, 815, 820, 840, 860, 850, 855, 950,
+  1100,
+];
+const NET_FOLLOWERS_ANCHORS = [
+  270, 290, 310, 330, 345, 350, 350, 350, 350, 350,
+  345, 380, 420, 450, 470, 480, 485, 480, 460, 440,
+  410, 380, 360, 350, 320, 290, 260, 210, 190, 240,
+  340,
+];
+const PROFILE_VIEWS_ANCHORS = [
+  20, 30, 50, 60, 40, 15, 20, 30, 25, 35,
+  20, 40, 60, 50, 30, 20, 35, 50, 30, 25,
+  20, 50, 70, 50, 30, 20, 50, 60, 30, 50,
+  35,
+];
+
 function generateData(): Row[] {
   const rows: Row[] = [];
   const start = new Date(2026, 2, 2); // Mar 2, 2026
@@ -75,15 +145,11 @@ function generateData(): Row[] {
     // `day: 'numeric'` (not '2-digit') — Figma labels read "Mar 2",
     // not "Mar 02". Leading-zero days looked cramped at 12 px.
     const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    // Smooth-ish synthesized curves so the 3 areas visibly overlap.
-    // Phase-shift the followers vs. net-followers waves (same mean
-    // 1091) so the two top bands don't render as a single band.
-    const t = i / 30;
     rows.push({
       date: label,
-      netFollowers: Math.round(1091 + Math.sin(t * 6) * 70),
-      followers:    Math.round(1091 + Math.sin(t * 4 + 1.6) * 90),
-      profileViews: Math.round(200 + Math.cos(t * 5) * 35),
+      netFollowers: NET_FOLLOWERS_ANCHORS[i],
+      followers:    FOLLOWERS_ANCHORS[i],
+      profileViews: PROFILE_VIEWS_ANCHORS[i],
     });
   }
   return rows;
@@ -165,6 +231,13 @@ interface AudienceGrowthModuleProps {
    * right side of the legend row.
    */
   profiles?: MockProfile[];
+  /**
+   * Module's network binding from `ReportModule.network`.  Drives the
+   * series palette via `getSeries` — TikTok gets the all-blue
+   * gradient; anything else falls back to the cross-network green /
+   * blue / orange.  Optional so cross-network callers can omit it.
+   */
+  network?: string | null;
 }
 
 // Legend row — Figma 1026:38728 body (845×536): chart = 496, then a
@@ -206,7 +279,10 @@ export function AudienceGrowthModule({
   contentHeight,
   contentWidth = 0,
   profiles = [],
+  network,
 }: AudienceGrowthModuleProps) {
+  const series = getSeries(network);
+  const curveType = useChartCurveStyle();
   const chartH = Math.max(contentHeight - LEGEND_RESERVE, 120);
   const yTickCount = pickYTickCount(chartH);
   // Plot width ≈ content width minus the y-axis gutter (32 px). Fall
@@ -269,10 +345,10 @@ export function AudienceGrowthModule({
             />
             <Tooltip content={<ModuleTooltip />} cursor={{ stroke: '#C4C3C6', strokeDasharray: '3 3' }} />
             {/* Render largest area first so smaller series sit on top. */}
-            {SERIES.map((s) => (
+            {series.map((s) => (
               <Area
                 key={s.key}
-                type="monotone"
+                type={curveType}
                 dataKey={s.key}
                 name={s.label}
                 stroke={s.color}
@@ -308,7 +384,7 @@ export function AudienceGrowthModule({
           className="flex flex-wrap items-center"
           style={{ columnGap: pickSeriesGap(contentWidth), rowGap: 8 }}
         >
-          {SERIES.map((s) => (
+          {series.map((s) => (
             <div key={s.key} className="flex items-center gap-1">
               <span
                 className="inline-block w-3 h-3 rounded-full flex-shrink-0"

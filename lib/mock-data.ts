@@ -1,4 +1,4 @@
-import { ModuleDefinition, MockDataPoint, MetricData, TableRow, ListItem, BubblePoint } from '@/types';
+import { ModuleDefinition, MockDataPoint, MetricData, TableRow, ListItem, BubblePoint, VideoCardData } from '@/types';
 
 // ─── Module catalog ───────────────────────────────────────────────────────────
 //
@@ -353,6 +353,48 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     defaultW: 1,
     defaultH: 6,
   },
+  // ── Five-metric KPI strip per the new TikTok report design
+  // (Figma 2117:67139).  Profile Views + Video Views already exist
+  // above; these three round out the strip and supersede the older
+  // standalone Likes / Comments cards in the canonical preset
+  // (the legacy cards are retained so existing saved reports keep
+  // rendering, but the TikTok-only template no longer seeds them).
+  {
+    id: 'tiktok-followers',
+    name: 'Followers',
+    description: 'Total TikTok followers for the connected profile, as a single headline metric.',
+    platforms: ['tiktok'],
+    supportedChartTypes: ['metric'],
+    defaultChartType: 'metric',
+    category: 'TikTok',
+    icon: '👥',
+    defaultW: 1,
+    defaultH: 6,
+  },
+  {
+    id: 'tiktok-interactions',
+    name: 'Interactions',
+    description: 'Combined TikTok likes, comments, and shares as a single headline interactions metric.',
+    platforms: ['tiktok'],
+    supportedChartTypes: ['metric'],
+    defaultChartType: 'metric',
+    category: 'TikTok',
+    icon: '👥',
+    defaultW: 1,
+    defaultH: 6,
+  },
+  {
+    id: 'tiktok-net-followers',
+    name: 'Net followers',
+    description: 'Net follower delta over the selected period (gained minus lost) on TikTok.',
+    platforms: ['tiktok'],
+    supportedChartTypes: ['metric'],
+    defaultChartType: 'metric',
+    category: 'TikTok',
+    icon: '👥',
+    defaultW: 1,
+    defaultH: 6,
+  },
   // ── TikTok — new modules ────────────────────────────────────────────────
   // Time-series + ranked-day + bubble-grid concepts. Scoped to TikTok
   // for now; promotion to cross-network is just an edit to `platforms`
@@ -447,6 +489,78 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     defaultW: 2,
     defaultH: 18,
   },
+  // Stubs for the new TikTok modules from the canonical layout list.
+  // Each one ships with a minimal list payload (see MOCK_LIST_DATA
+  // below) so the canvas slot renders something visible until the
+  // per-module design lands.  Refining each one happens module-by-
+  // module in subsequent passes.
+  {
+    id: 'tiktok-best-performing-day-summary',
+    name: 'Best performing day summary',
+    description: 'Top-N performing days within the selected window, ranked by total views.',
+    platforms: ['tiktok'],
+    supportedChartTypes: ['list'],
+    defaultChartType: 'list',
+    category: 'TikTok',
+    icon: '🏆',
+    defaultW: 2,
+    defaultH: 18,
+  },
+  {
+    id: 'tiktok-followers-online-summary',
+    name: 'Followers online summary',
+    description: 'Hours / days where the most followers are active, summarized as a ranked list.',
+    platforms: ['tiktok'],
+    supportedChartTypes: ['list'],
+    defaultChartType: 'list',
+    category: 'TikTok',
+    icon: '🕒',
+    defaultW: 2,
+    defaultH: 18,
+  },
+  {
+    id: 'tiktok-video-engagement',
+    name: 'Video engagement',
+    description: 'Top videos ranked by total engagement (likes + comments + shares).',
+    platforms: ['tiktok'],
+    supportedChartTypes: ['list'],
+    defaultChartType: 'list',
+    category: 'TikTok',
+    icon: '💬',
+    defaultW: 4,
+    // h:24 → 24 × 13 (CHART_H_FACTOR) = 312 NEW rows × 2 px
+    // (ROW_HEIGHT) = 624 raw, minus the 78 px module chrome (20 px
+    // padding top+bottom, 14 px title row, 24 px header gap)
+    // = 546 px usable.  The card is a fixed 479 px tall and the
+    // footer + 16 px gap eats ~52 px, leaving ~15 px of breathing
+    // room at the bottom.  Bumping higher just adds invisible empty
+    // space below the footer — the card itself doesn't grow.
+    defaultH: 24,
+  },
+  {
+    id: 'tiktok-video-watch-metrics',
+    name: 'Video watch metrics',
+    description: 'Top videos ranked by watch metrics (total watch time, average view duration, completion rate).',
+    platforms: ['tiktok'],
+    supportedChartTypes: ['list'],
+    defaultChartType: 'list',
+    category: 'TikTok',
+    icon: '⏱️',
+    defaultW: 4,
+    defaultH: 24,
+  },
+  {
+    id: 'tiktok-video-sources',
+    name: 'Video sources',
+    description: 'Where your video views came from (For You, Following, Profile, etc.), ranked.',
+    platforms: ['tiktok'],
+    supportedChartTypes: ['list'],
+    defaultChartType: 'list',
+    category: 'TikTok',
+    icon: '🔀',
+    defaultW: 4,
+    defaultH: 24,
+  },
 ];
 
 // Generate time series data
@@ -472,7 +586,30 @@ function generateTimeSeries(days: number, base: number, variance: number): MockD
 export const MOCK_CHART_DATA: Record<string, MockDataPoint[]> = {
   'audience-growth': generateTimeSeries(28, 45200, 800),
   'facebook-page-insights': generateTimeSeries(28, 89000, 12000),
-  'tiktok-video-views-by-day': generateTimeSeries(28, 28000, 6000),
+  // Hand-picked anchor sequence per Figma 2205:52108 (TikTok comp).
+  // Real day-to-day variance is the point — `generateTimeSeries`
+  // produced smooth random noise that linear vs monotone couldn't
+  // visually distinguish, so the comp's sharp Mar 12 / Mar 14 peaks
+  // and the Mar 19–21 dip are encoded literally below.  29 values
+  // cover Mar 4 – Apr 1; the calendar dates are stamped relative to
+  // a fixed start so the x-axis labels match the design exactly.
+  'tiktok-video-views-by-day': (() => {
+    const VIEWS_ANCHORS = [
+       60,  50,  55,  90, 120,  70, 120,  30,
+      460, 110, 490, 420, 400, 395, 380, 270,
+      245, 260, 365, 420, 420, 480, 570, 480,
+      480, 605, 545, 545, 705,
+    ];
+    const start = new Date(2026, 2, 4); // Mar 4, 2026
+    return VIEWS_ANCHORS.map((value, i) => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      return {
+        date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        value,
+      };
+    });
+  })(),
   // Note: `tiktok-interactions-by-day` is intentionally absent — all
   // three of its variants (bar / line / area) are bespoke and live in
   // `InteractionsByDayModule.tsx`. The bar variant reads
@@ -480,18 +617,25 @@ export const MOCK_CHART_DATA: Record<string, MockDataPoint[]> = {
   // their own 28-day `TIME_SERIES_DATA` inside that file.
 };
 
-// Weekly engagement breakdown for `tiktok-interactions-by-day`. Numbers
-// match the Figma comp (1290:101559) literally — Sun is the heaviest
-// day and the totals climb monotonically through the week. Stacked
-// bottom-to-top: Shares (green) → Comments (blue) → Likes (orange).
+// Daily engagement breakdown for `tiktok-interactions-by-day`.
+// Numbers + dates match Figma 2219:39079: 11 columns on the visible
+// tick positions (Mar 4 / 8 / 12 / 16 / 20 / 22 / 24 / 26 / 28 / 30
+// / Apr 1).  Stack order bottom → top is Shares → Comments → Likes
+// (matches the SERIES array in InteractionsByDayModule.tsx).  Totals
+// per column read straight off the comp: 600, 1100, 215, 655, 890,
+// 780, 570, 820, 720, 970, 930.
 export const MOCK_INTERACTIONS_BY_DAY = [
-  { day: 'Mon', shares: 120, comments: 30, likes: 15 },
-  { day: 'Tue', shares: 90,  comments: 40, likes: 20 },
-  { day: 'Wed', shares: 140, comments: 35, likes: 25 },
-  { day: 'Thu', shares: 100, comments: 45, likes: 18 },
-  { day: 'Fri', shares: 130, comments: 50, likes: 22 },
-  { day: 'Sat', shares: 160, comments: 55, likes: 30 },
-  { day: 'Sun', shares: 170, comments: 60, likes: 28 },
+  { date: 'Mar 4',  shares: 420, comments: 100, likes:  80 },
+  { date: 'Mar 8',  shares: 320, comments: 400, likes: 380 },
+  { date: 'Mar 12', shares: 150, comments:  50, likes:  15 },
+  { date: 'Mar 16', shares: 340, comments: 120, likes: 195 },
+  { date: 'Mar 20', shares: 620, comments: 160, likes: 110 },
+  { date: 'Mar 22', shares: 490, comments: 190, likes: 100 },
+  { date: 'Mar 24', shares: 400, comments: 100, likes:  70 },
+  { date: 'Mar 26', shares: 580, comments: 140, likes: 100 },
+  { date: 'Mar 28', shares: 510, comments: 120, likes:  90 },
+  { date: 'Mar 30', shares: 680, comments: 170, likes: 120 },
+  { date: 'Apr 1',  shares: 655, comments: 160, likes: 115 },
 ];
 
 // Single-day summary rows for the SummaryCardModule consumers
@@ -504,18 +648,27 @@ export const MOCK_INTERACTIONS_BY_DAY = [
 // triplet; only the middle row's label/value differ:
 //   • best-engaging-day  → "Total engagement" / 800
 //   • best-performing-day → "Total views"     / 134
+// Values per Figma 2208:52384 (best-performing) and 2219:39350
+// (best-engaging).  The Growth row carries a `trend` flag so the
+// SummaryCardModule renders the colored circle + arrow chip on that
+// row only.  Cast to `const` so the `'up' | 'down'` literal types
+// survive into `SummaryRow[]` consumers without widening to `string`.
 export const MOCK_BEST_ENGAGING_DAY_ROWS = [
-  { label: 'Date',             value: 'Monday 23 September 2024' },
-  { label: 'Total engagement', value: '800' },
-  { label: 'Previous period',  value: '697' },
-  { label: 'Growth',           value: '+8 (9%)' },
+  { label: 'Date',             value: 'Monday 25 May 2026' },
+  // Math-consistent: 20 − 180 = −160; −160 / 180 = −88.89%.  Preserves
+  // the Figma headline (Total = 20, change = −88.89%) by adjusting the
+  // Previous-period anchor up from 18 → 180 so the row arithmetic
+  // actually computes.
+  { label: 'Total engagement', value: '20' },
+  { label: 'Previous period',  value: '180' },
+  { label: 'Growth',           value: '-160 (-88.89%)', trend: 'down' as const },
 ];
 
 export const MOCK_BEST_PERFORMING_DAY_ROWS = [
-  { label: 'Date',            value: 'Monday 23 September 2024' },
-  { label: 'Total views',     value: '134' },
-  { label: 'Previous period', value: '126' },
-  { label: 'Growth',          value: '+8 (9%)' },
+  { label: 'Date',            value: 'Monday 25 May 2026' },
+  { label: 'Total engagement', value: '731' },
+  { label: 'Previous period', value: '221' },
+  { label: 'Growth',          value: '+510 (+230%)', trend: 'up' as const },
 ];
 
 // Metric-card headline data. Each entry is an array of headline metrics —
@@ -541,10 +694,18 @@ export const MOCK_METRICS: Record<string, MetricData[]> = {
   // ── TikTok ──
   // The cross-network `followers` metric covers TikTok as well; no
   // standalone `tiktok-followers` is needed.
-  'tiktok-video-views':    [{ label: 'Video Views',   value: '842K', change: 19.22, changeAbsolute: '+118',  changeLabel: 'vs last period' }],
-  'tiktok-profile-views':  [{ label: 'Profile Views', value: '5.6K', change: -2,    changeAbsolute: '-80',   changeLabel: 'vs last period' }],
+  'tiktok-video-views':    [{ label: 'Video Views',   value: '732',  change: 19.22, changeAbsolute: '+118',  changeLabel: 'vs last period' }],
+  'tiktok-profile-views':  [{ label: 'Profile Views', value: '12',   change: -2,    changeAbsolute: '-80',   changeLabel: 'vs last period' }],
   'tiktok-likes':          [{ label: 'Likes',         value: '98.4K',change: 12.3,  changeAbsolute: '+9.8K', changeLabel: 'vs last period' }],
   'tiktok-comments':       [{ label: 'Comments',      value: '3.2K', change: 4.5,   changeAbsolute: '+138',  changeLabel: 'vs last period' }],
+  // Three new TikTok-strip metrics (Figma 2117:67230 / 2117:67203 /
+  // 2201:51505).  Values mirror the design comps; the +1600 % deltas
+  // on followers / interactions stress-test the comparison-row
+  // formatter against four-digit percent changes (which the existing
+  // metric data didn't exercise).
+  'tiktok-followers':      [{ label: 'Followers',     value: '1.1k', change: 1600,  changeAbsolute: '+32',   changeLabel: 'vs last period' }],
+  'tiktok-interactions':   [{ label: 'Interactions',  value: '34',   change: 1600,  changeAbsolute: '+32',   changeLabel: 'vs last period' }],
+  'tiktok-net-followers':  [{ label: 'Net followers', value: '1090', change: 19.22, changeAbsolute: '+118',  changeLabel: 'vs last period' }],
 };
 
 export const MOCK_TABLE_DATA: TableRow[] = [
@@ -633,11 +794,175 @@ export const MOCK_LIST_ITEMS: ListItem[] = [
 // `SummaryCardModule` (4 label/value rows, Figma 1291:123415 +
 // 1339:217275) instead of the ranked list shape, and consume their
 // own `MOCK_*_ROWS` arrays wired in directly from ModuleCard.
+// Stub list payloads for the new TikTok modules.  Each one is a
+// minimal `{title, subtitle, metrics}` ranked list so the canvas
+// slot renders something legible until the per-module design lands.
+// All five share the same `top-videos` posts list as a base since
+// they all rank videos by some metric; only the `metrics` column
+// set differs per module to demonstrate what each surface
+// emphasises.
+const STUB_VIDEO_RANK_BASE = MOCK_LIST_ITEMS;
+
 export const MOCK_LIST_DATA: Record<string, ListItem[]> = {
   'top-posts': MOCK_LIST_ITEMS,
   // `tiktok-top-videos` row intentionally absent — see the catalog note
   // alongside the (also-removed) module definition above.
+
+  // ── New TikTok modules ───────────────────────────────────────
+  'tiktok-best-performing-day-summary': [
+    { id: 'bpds-1', title: 'Monday 25 May 2026',  metrics: [{ label: 'Total views', value: '731' }, { label: 'Growth', value: '+510 (+230%)' }] },
+    { id: 'bpds-2', title: 'Friday 22 May 2026',  metrics: [{ label: 'Total views', value: '604' }, { label: 'Growth', value: '+78 (+15%)' }] },
+    { id: 'bpds-3', title: 'Sunday 17 May 2026',  metrics: [{ label: 'Total views', value: '512' }, { label: 'Growth', value: '+24 (+5%)' }] },
+    { id: 'bpds-4', title: 'Wednesday 13 May 2026', metrics: [{ label: 'Total views', value: '488' }, { label: 'Growth', value: '+12 (+2.5%)' }] },
+    { id: 'bpds-5', title: 'Tuesday 5 May 2026',  metrics: [{ label: 'Total views', value: '410' }, { label: 'Growth', value: '−18 (−4.2%)' }] },
+  ],
+  'tiktok-followers-online-summary': [
+    { id: 'fos-1', title: 'Wednesday · 12 PM – 2 PM',  metrics: [{ label: 'Followers online', value: '16.2k' }] },
+    { id: 'fos-2', title: 'Friday · 1 PM – 3 PM',      metrics: [{ label: 'Followers online', value: '14.8k' }] },
+    { id: 'fos-3', title: 'Monday · 12 PM – 2 PM',     metrics: [{ label: 'Followers online', value: '13.5k' }] },
+    { id: 'fos-4', title: 'Tuesday · 1 PM – 3 PM',     metrics: [{ label: 'Followers online', value: '12.9k' }] },
+    { id: 'fos-5', title: 'Thursday · 12 PM – 2 PM',   metrics: [{ label: 'Followers online', value: '12.4k' }] },
+  ],
+  'tiktok-video-engagement':    STUB_VIDEO_RANK_BASE,
+  'tiktok-video-watch-metrics': STUB_VIDEO_RANK_BASE.map((it) => ({
+    ...it,
+    metrics: [
+      { label: 'Watch time', value: it.metrics[0]?.value ?? '' },
+      { label: 'Avg duration', value: '0:38' },
+      { label: 'Completion', value: '64%' },
+    ],
+  })),
+  'tiktok-video-sources': STUB_VIDEO_RANK_BASE.map((it) => ({
+    ...it,
+    metrics: [
+      { label: 'For You', value: '78%' },
+      { label: 'Following', value: '12%' },
+      { label: 'Profile', value: '10%' },
+    ],
+  })),
 };
+
+// ─── Video-card carousels ──────────────────────────────────────────────────
+//
+// Hand-authored data for the `tiktok-video-engagement` carousel
+// (Figma 2222:40922).  Each card is a self-contained post snapshot
+// (profile chip, caption, thumbnail, 4-row metric table).  Cards are
+// authored with **distinct gradient thumbnails** so the strip reads
+// visually as different videos without us shipping an image-per-card
+// binary into the repo.
+//
+// Profile data here is decoupled from the user's connected-profile
+// catalogue (`PROFILE_GROUPS` in `lib/profile-data.ts`) — these are
+// per-post handles, not selected profiles, and the post may come from
+// any TikTok handle in the user's network.  Sibling carousels
+// (`tiktok-video-watch-metrics`, `tiktok-video-sources`) will ship
+// their own payloads with module-specific metric columns.
+export const MOCK_VIDEO_ENGAGEMENT_CARDS: VideoCardData[] = [
+  {
+    id: 've-1',
+    date: '23 Sep 2024 - 10.34 AM',
+    profile: { name: 'Tenceclothier', handle: '@tenceclothier_ng', monogram: 'T' },
+    caption: '🌍✨ Navigating the Wild World of Social Media! ✨📱 From viral trends to influencer hacks, join me as I explore how social media shapes our lives! 🎉📈',
+    thumbnail: 'linear-gradient(135deg, #FFC4D8 0%, #B8C4F9 55%, #9F8DF0 100%)',
+    metrics: [
+      { label: 'Views',    value: '204' },
+      { label: 'Likes',    value: '134' },
+      { label: 'Comments', value: '126' },
+      { label: 'Shares',   value: '28' },
+    ],
+  },
+  {
+    id: 've-2',
+    date: '21 Sep 2024 - 4.12 PM',
+    profile: { name: 'Tenceclothier', handle: '@tenceclothier_gh', monogram: 'T' },
+    caption: 'Behind the scenes of our newest spring drop 🌸 Watch how the campaign came together from sketch to storefront.',
+    thumbnail: 'linear-gradient(135deg, #FEE5B6 0%, #FFB48A 55%, #F77B6E 100%)',
+    metrics: [
+      { label: 'Views',    value: '192' },
+      { label: 'Likes',    value: '128' },
+      { label: 'Comments', value: '118' },
+      { label: 'Shares',   value: '24' },
+    ],
+  },
+  {
+    id: 've-3',
+    date: '18 Sep 2024 - 9.45 AM',
+    profile: { name: 'Tenceclothier', handle: '@tenceclothier_ke', monogram: 'T' },
+    caption: 'A quick GRWM with our signature linen tee 🌿 Comfy, breathable, and slept-in soft from day one.',
+    thumbnail: 'linear-gradient(135deg, #C7F0E1 0%, #95CAEA 55%, #5C8FE0 100%)',
+    metrics: [
+      { label: 'Views',    value: '186' },
+      { label: 'Likes',    value: '121' },
+      { label: 'Comments', value: '109' },
+      { label: 'Shares',   value: '22' },
+    ],
+  },
+  {
+    id: 've-4',
+    date: '15 Sep 2024 - 6.50 PM',
+    profile: { name: 'Tenceclothier', handle: '@tenceclothier_rw', monogram: 'T' },
+    caption: 'How three friends styled the same jacket three different ways 🧥 Comment which look you’d wear out tonight!',
+    thumbnail: 'linear-gradient(135deg, #E0CDF8 0%, #B5A8F0 55%, #8E78EA 100%)',
+    metrics: [
+      { label: 'Views',    value: '178' },
+      { label: 'Likes',    value: '114' },
+      { label: 'Comments', value: '101' },
+      { label: 'Shares',   value: '19' },
+    ],
+  },
+  {
+    id: 've-5',
+    date: '12 Sep 2024 - 11.05 AM',
+    profile: { name: 'Tenceclothier', handle: '@tenceclothier_tz', monogram: 'T' },
+    caption: 'Studio tour with @tenceclothier_tz — patternmaking, dyeing, and the cutting table that started it all ✂️',
+    thumbnail: 'linear-gradient(135deg, #F5E8D2 0%, #E0B57A 55%, #B07E3D 100%)',
+    metrics: [
+      { label: 'Views',    value: '165' },
+      { label: 'Likes',    value: '108' },
+      { label: 'Comments', value: '94'  },
+      { label: 'Shares',   value: '17' },
+    ],
+  },
+  {
+    id: 've-6',
+    date: '09 Sep 2024 - 7.30 AM',
+    profile: { name: 'Tenceclothier', handle: '@tenceclothier_ug', monogram: 'T' },
+    caption: 'Trying every customer-tagged outfit from this week — which one is the winner? Watch til the end 👀',
+    thumbnail: 'linear-gradient(135deg, #D2F0E2 0%, #92D3A5 55%, #4FA877 100%)',
+    metrics: [
+      { label: 'Views',    value: '152' },
+      { label: 'Likes',    value: '97'  },
+      { label: 'Comments', value: '86'  },
+      { label: 'Shares',   value: '14' },
+    ],
+  },
+  {
+    id: 've-7',
+    date: '06 Sep 2024 - 2.18 PM',
+    profile: { name: 'Tenceclothier', handle: '@tenceclothier_ng', monogram: 'T' },
+    caption: 'Capsule wardrobe challenge — five pieces, seven days, zero repeats. Day-by-day breakdown 👇',
+    thumbnail: 'linear-gradient(135deg, #FFD5E0 0%, #FF98B6 55%, #E15E8C 100%)',
+    metrics: [
+      { label: 'Views',    value: '141' },
+      { label: 'Likes',    value: '89'  },
+      { label: 'Comments', value: '78'  },
+      { label: 'Shares',   value: '12' },
+    ],
+  },
+  {
+    id: 've-8',
+    date: '03 Sep 2024 - 8.42 AM',
+    profile: { name: 'Tenceclothier', handle: '@tenceclothier_gh', monogram: 'T' },
+    caption: 'Backstage at the Accra pop-up — first 50 customers, sold-out racks, and one happy team 🛍️',
+    thumbnail: 'linear-gradient(135deg, #C7E2F8 0%, #7AB1E6 55%, #3D7FCC 100%)',
+    metrics: [
+      { label: 'Views',    value: '128' },
+      { label: 'Likes',    value: '78'  },
+      { label: 'Comments', value: '67'  },
+      { label: 'Shares',   value: '10' },
+    ],
+  },
+];
 
 // Pie / donut data. Platform-specific audience modules
 // (instagram-audience, tiktok-audience) render an age-bucket breakdown;

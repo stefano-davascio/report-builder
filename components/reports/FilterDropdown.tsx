@@ -692,7 +692,7 @@ function CategoryRow({ label, active, onOpen, onLeave }: CategoryRowProps) {
         // make it the active row.
         active
           ? 'bg-[rgba(81,61,217,0.1)]'
-          : 'hover:bg-[rgba(81,61,217,0.1)]',
+          : 'hover:bg-[rgba(32,30,36,0.05)]',
       )}
     >
       <span>{label}</span>
@@ -715,7 +715,7 @@ function SuggestionRow({ onClick, leading, label }: SuggestionRowProps) {
       className={cn(
         'flex items-center gap-[8px] w-full px-[8px] py-[10px] rounded-[4px]',
         'text-[14px] leading-[17.5px] text-[#201E24] text-left',
-        'hover:bg-[rgba(81,61,217,0.1)] transition-colors cursor-pointer',
+        'hover:bg-[rgba(32,30,36,0.05)] transition-colors cursor-pointer',
       )}
     >
       {leading && <span className="flex-shrink-0">{leading}</span>}
@@ -969,7 +969,7 @@ function CheckboxRow({ checked, onClick, leading, label }: CheckboxRowProps) {
         // including the 15-px checkbox).
         'flex items-center gap-[8px] w-full px-[8px] py-[10px] rounded-[4px]',
         'text-[14px] leading-[17.5px] text-[#201E24] text-left',
-        'hover:bg-[rgba(81,61,217,0.1)] transition-colors cursor-pointer',
+        'hover:bg-[rgba(32,30,36,0.05)] transition-colors cursor-pointer',
       )}
     >
       {/* 15-px square checkbox per Figma 1678:75531: white bg +
@@ -1045,7 +1045,7 @@ function SelectAllFooter({
         onClick={allSelected ? onUnselectAll : onSelectAll}
         className={cn(
           'flex items-center h-[24px] px-[8px] py-[6px] rounded-[60px]',
-          'hover:bg-[rgba(81,61,217,0.1)] transition-colors cursor-pointer',
+          'hover:bg-[rgba(32,30,36,0.05)] transition-colors cursor-pointer',
         )}
       >
         <span

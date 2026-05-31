@@ -176,7 +176,7 @@ export function ActionMenu({ onAction, renameEnabled = false }: ActionMenuProps)
                       'w-full h-[40px] px-[16px] flex items-center gap-[16px] rounded-[4px]',
                       'text-[14px] leading-[21px] tracking-[0.07px] text-[#201E24] text-left',
                       // PRIMARY purple alpha-tint, not neutral gray.
-                      'hover:bg-[rgba(81,61,217,0.1)] transition-colors',
+                      'hover:bg-[rgba(32,30,36,0.05)] transition-colors',
                       'cursor-pointer',
                     )}
                   >
