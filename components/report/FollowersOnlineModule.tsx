@@ -42,9 +42,19 @@ function dayToRow(day: number): number {
   return (day + 6) % 7;
 }
 
-// Hour ticks — every hour 0…23. Vertical labels keep this readable
-// even at the 24-tick crush.
+// Hour ticks — every hour 0…23.  Used for both the vertical
+// gridlines (the rendered "cells" — always all 24 so the grid
+// reads as a clean 7 × 24 heatmap) and the rotated x-axis
+// labels.  At narrower module widths we thin the LABEL set to
+// every-other hour (12 AM, 2 AM, 4 AM, …) so the labels don't
+// overlap, while keeping all 24 gridlines in place.
 const HOUR_TICKS = Array.from({ length: 24 }, (_, i) => i);
+const HOUR_TICKS_EVEN = HOUR_TICKS.filter((h) => h % 2 === 0);
+/** Below this `contentWidth`, drop every other hour label.  At
+ *  ~24 labels × ~14 px stride the labels start crowding around
+ *  the 600 px chart-width mark; thinning to 12 keeps them
+ *  readable down to ~300 px. */
+const HOUR_LABEL_THIN_THRESHOLD_PX = 600;
 
 function formatHourLong(h: number): string {
   if (h === 0) return '12 AM';
@@ -230,6 +240,15 @@ export function FollowersOnlineModule({
     ? Math.min(Math.max(contentWidth - 80, 240), 420)
     : 320;
 
+  // Pick the label-tick set based on the available width.  Below
+  // the threshold, drop every other hour label (12 AM / 2 AM /
+  // 4 AM / …).  Gridlines stay at full 24-hour density via the
+  // separate `HOUR_TICKS.map(...)` reference-line pass.
+  const xAxisLabelTicks =
+    contentWidth > 0 && contentWidth < HOUR_LABEL_THIN_THRESHOLD_PX
+      ? HOUR_TICKS_EVEN
+      : HOUR_TICKS;
+
   return (
     <div className="flex flex-col h-full w-full">
       <div style={{ height: chartH }}>
@@ -262,7 +281,7 @@ export function FollowersOnlineModule({
               dataKey="hour"
               orientation="top"
               domain={[-0.5, 23.5]}
-              ticks={HOUR_TICKS}
+              ticks={xAxisLabelTicks}
               tickFormatter={formatHourLong}
               tickLine={false}
               axisLine={false}

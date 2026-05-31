@@ -917,7 +917,15 @@ export function ReportBuilderPage({
             removing the chrome only changes what's painted behind. */}
         <div
           className={cn(
-            'flex-1 min-w-0 overflow-y-auto',
+            // `scrollbar-gutter: stable` reserves space for the
+            // vertical scrollbar so it sits in its own gutter on
+            // the right edge instead of overlaying modules.  On
+            // macOS the default scrollbar is an overlay that
+            // floats on top of content and visually clips the
+            // right-edge of the rightmost modules; reserving the
+            // gutter keeps every module fully visible regardless
+            // of whether the scrollbar is shown.
+            'flex-1 min-w-0 overflow-y-auto [scrollbar-gutter:stable]',
             canvasMode === 'white' && 'bg-white border border-[#E8E8E9] rounded-[8px]',
           )}
         >

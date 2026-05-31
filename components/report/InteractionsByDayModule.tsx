@@ -216,8 +216,13 @@ interface InteractionsByDayModuleProps {
 // so the stacked totals match Figma 2219:39079 exactly regardless of
 // the data peak.  Generated once at module level since the ticks
 // never change.
-const BAR_Y_DOMAIN: [number, number] = [0, 1000];
-const BAR_Y_TICKS = Array.from({ length: 11 }, (_, i) => i * 100); // 0…1000
+// Y-axis domain bumped to 1100 (was 1000) because the largest stack
+// in `MOCK_INTERACTIONS_BY_DAY` is Mar 8 = 320 + 400 + 380 = 1100,
+// which previously poked over the top gridline and left the 11th
+// (topmost) gridline unlabelled.  12 ticks at every 100 means every
+// horizontal line has a matching label.
+const BAR_Y_DOMAIN: [number, number] = [0, 1100];
+const BAR_Y_TICKS = Array.from({ length: 12 }, (_, i) => i * 100); // 0…1100
 
 export function InteractionsByDayModule({
   data,
@@ -246,7 +251,30 @@ export function InteractionsByDayModule({
             maxBarSize={56}
             barCategoryGap="20%"
           >
-            <CartesianGrid stroke="#E8E8E9" strokeWidth={1} vertical={false} />
+            {/* Draw one horizontal gridline per `BAR_Y_TICKS`
+                entry — every 100, 0 → 1000 — so the grid aligns
+                1:1 with the YAxis labels.  Recharts' default
+                tickCount-driven layout draws 6-7 lines across
+                [0, 1000], which don't line up with the 11 labels
+                and leaves the top cell half-height.
+                We linearly interpolate y positions from the
+                chart's clip bounds (`offset.top` → bottom = top +
+                `offset.height`) since the YAxis is a simple
+                [0, 1000] linear scale.  Reaching into the d3
+                scale via `yAxis.scale(t)` was unreliable across
+                Recharts versions; manual interpolation is stable. */}
+            <CartesianGrid
+              stroke="#E8E8E9"
+              strokeWidth={1}
+              vertical={false}
+              horizontalCoordinatesGenerator={(ctx: { offset?: { top?: number; height?: number } }) => {
+                const top = ctx?.offset?.top ?? 0;
+                const innerH = ctx?.offset?.height ?? 0;
+                if (innerH <= 0) return [];
+                const max = BAR_Y_DOMAIN[1];
+                return BAR_Y_TICKS.map((t) => top + innerH * (1 - t / max));
+              }}
+            />
             <XAxis
               dataKey="date"
               tickLine={false}

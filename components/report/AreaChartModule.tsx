@@ -28,7 +28,6 @@ import { MockProfile } from '@/lib/profile-data';
 import { MockDataPoint } from '@/types';
 import {
   formatYAxis,
-  pickYTickCount,
   pickXTickCount,
   computeXTicks,
   LEGEND_RESERVE,
@@ -48,6 +47,44 @@ const Y_AXIS_W = 32;
 // stroke + the same token at this opacity as fill produce a band that
 // reads as a flat tint rather than a saturated wash.
 const FILL_OPACITY = 0.18;
+
+/**
+ * Pick a "nice" Y-axis ceiling + tick array that hugs the data max
+ * instead of Recharts' default `[0, 'auto']` algorithm, which often
+ * leaves a big empty band at the top (e.g. data max 705 →
+ * Recharts picks max=900 with 150-step ticks, leaving ~200 px of
+ * empty space above the topmost data point).
+ *
+ * The algorithm: scan a fixed step ladder (1, 2, 5, 10, 20, 25, …)
+ * for the smallest step whose `dataMax`-rounded-up value yields
+ * 5-9 ticks.  Returns the matching `[domain, ticks]` pair.
+ */
+function computeNiceYAxis(dataMax: number): {
+  domain: [number, number];
+  ticks: number[];
+} {
+  // Floor of 1 so an all-zero series still gets a sane axis.
+  const safeMax = Math.max(dataMax, 1);
+  const STEPS = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000];
+  for (const step of STEPS) {
+    const max = Math.ceil(safeMax / step) * step;
+    const count = max / step + 1; // +1 because we include both 0 and max
+    if (count >= 5 && count <= 9) {
+      return {
+        domain: [0, max],
+        ticks: Array.from({ length: count }, (_, i) => i * step),
+      };
+    }
+  }
+  // Fallback: very large dataMax — go with the biggest step.
+  const step = STEPS[STEPS.length - 1];
+  const max = Math.ceil(safeMax / step) * step;
+  const count = max / step + 1;
+  return {
+    domain: [0, max],
+    ticks: Array.from({ length: count }, (_, i) => i * step),
+  };
+}
 
 interface TimeSeriesAreaModuleProps {
   data: MockDataPoint[];
@@ -79,8 +116,13 @@ export function TimeSeriesAreaModule({
 }: TimeSeriesAreaModuleProps) {
   const curveType = useChartCurveStyle();
   const chartH = Math.max(contentHeight - LEGEND_RESERVE, 120);
-  const yTickCount = pickYTickCount(chartH);
   const plotW = contentWidth > 0 ? contentWidth - Y_AXIS_W : 0;
+  // Data-driven y-axis ticks so the chart hugs the data max instead
+  // of Recharts auto-rounding to a value far above (e.g. data max
+  // 705 → auto picks 900, leaving ~200 px empty at the top).  See
+  // `computeNiceYAxis` for the step-ladder algorithm.
+  const dataMax = data.reduce((m, d) => Math.max(m, d.value), 0);
+  const { domain: yDomain, ticks: yTicks } = computeNiceYAxis(dataMax);
   const xTickCount = pickXTickCount(plotW);
   // `computeXTicks` is typed for the Audience-Growth row shape — for
   // tick anchoring we only need the `.date` string, so we pass the
@@ -95,7 +137,22 @@ export function TimeSeriesAreaModule({
       <div style={{ height: chartH }}>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-            <CartesianGrid stroke="#E8E8E9" strokeWidth={1} vertical={false} />
+            {/* Draw one horizontal gridline per tick (mirrors the
+                bar module's approach) — Recharts' default
+                tickCount layout doesn't sync with explicit
+                `ticks` so labels and gridlines can disagree. */}
+            <CartesianGrid
+              stroke="#E8E8E9"
+              strokeWidth={1}
+              vertical={false}
+              horizontalCoordinatesGenerator={(ctx: { offset?: { top?: number; height?: number } }) => {
+                const top = ctx?.offset?.top ?? 0;
+                const innerH = ctx?.offset?.height ?? 0;
+                if (innerH <= 0) return [];
+                const max = yDomain[1];
+                return yTicks.map((t) => top + innerH * (1 - t / max));
+              }}
+            />
             <XAxis
               dataKey="date"
               tickLine={false}
@@ -111,8 +168,8 @@ export function TimeSeriesAreaModule({
               axisLine={false}
               tickFormatter={formatYAxis}
               width={Y_AXIS_W}
-              domain={[0, 'auto']}
-              tickCount={yTickCount}
+              domain={yDomain}
+              ticks={yTicks}
               allowDecimals={false}
             />
             <Tooltip

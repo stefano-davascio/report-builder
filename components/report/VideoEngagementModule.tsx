@@ -111,10 +111,10 @@ function TikTokBadge() {
         viewBox="0 0 17 20"
         width={8}
         height={8}
-        // Position absolute is relative to the padding edge (= inner
-        // 10 × 10 black area). (1, 1) centers an 8 × 8 glyph inside
-        // that 10 × 10, leaving 1 px of black breathing room on every
-        // side so the "d" silhouette doesn't kiss the white ring.
+        // 8 × 8 with 1 px inset keeps the glyph inside the CIRCULAR
+        // 10 × 10 inner area — at 10 × 10 the path's corners pushed
+        // outside the badge's `rounded-full` clip and the silhouette
+        // turned into an unrecognizable smudge.
         style={{ position: 'absolute', left: 1, top: 1 }}
       >
         <path
