@@ -68,18 +68,28 @@ function TikTokBadge() {
       aria-hidden
       className="absolute bg-black rounded-full"
       style={{
+        // Visual is exactly 14 × 14 with a 2 px white border eaten
+        // INTO the 14 (box-sizing: border-box) so the black core is
+        // 10 × 10. Previously used `boxShadow: 0 0 0 2px #fff` which
+        // painted the 2 px ring OUTSIDE the 14 — total visual was
+        // 18 × 18 and read as oversized vs Figma 2222:40948.
         bottom: -3,
         left: 19,
         width: 14,
         height: 14,
-        boxShadow: '0 0 0 2px #fff',
+        border: '2px solid #fff',
+        boxSizing: 'border-box',
       }}
     >
       <svg
         viewBox="0 0 17 20"
-        width={10}
-        height={10}
-        style={{ position: 'absolute', left: 2, top: 2 }}
+        width={8}
+        height={8}
+        // Position absolute is relative to the padding edge (= inner
+        // 10 × 10 black area). (1, 1) centers an 8 × 8 glyph inside
+        // that 10 × 10, leaving 1 px of black breathing room on every
+        // side so the "d" silhouette doesn't kiss the white ring.
+        style={{ position: 'absolute', left: 1, top: 1 }}
       >
         <path
           d="M12.30 13.49V6.12C13.77 7.18 15.54 7.75 17.35 7.75V4.93C16.28 4.70 15.32 4.13 14.61 3.31C14.03 2.93 13.54 2.45 13.16 1.88C12.78 1.31 12.52 0.67 12.39 0H9.74V14.54C9.70 15.17 9.47 15.77 9.09 16.26C8.70 16.75 8.17 17.12 7.57 17.30C6.97 17.48 6.33 17.47 5.73 17.27C5.13 17.08 4.61 16.71 4.23 16.21C3.65 15.88 3.18 15.37 2.91 14.75C2.64 14.14 2.58 13.45 2.74 12.80C2.90 12.14 3.27 11.56 3.80 11.14C4.32 10.72 4.97 10.48 5.64 10.46C5.95 10.45 6.25 10.49 6.54 10.56V7.75C5.25 7.77 3.99 8.17 2.92 8.89C1.85 9.62 1.02 10.64 0.52 11.83C0.02 13.02 -0.12 14.33 0.11 15.60C0.34 16.87 0.94 18.05 1.82 18.98C2.82 19.68 3.99 20.10 5.21 20.17C6.43 20.25 7.64 19.99 8.72 19.43C9.80 18.87 10.71 18.02 11.34 16.98C11.97 15.93 12.30 14.74 12.30 13.52V13.49Z"
@@ -96,10 +106,22 @@ function PlayIcon() {
       viewBox="0 0 48 48"
       width={48}
       height={48}
+      fill="none"
       aria-hidden
-      style={{ filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.45))' }}
     >
-      <path d="M20 15 L34 24 L20 33 Z" fill="#ffffff" />
+      {/* Hollow 28 × 36 triangle, stroked at 3 px with rounded
+          line caps + joins — matches the Figma play icon the user
+          supplied directly.  Stroke colour is `#D2D2D3`
+          (DARK/dark--tint_80) so the outline reads as a soft
+          decorative play affordance on any gradient thumbnail
+          rather than competing with the content. */}
+      <path
+        d="M14 6L42 24L14 42V6Z"
+        stroke="#D2D2D3"
+        strokeWidth={3}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -154,7 +176,12 @@ function VideoCard({ card }: { card: VideoCardData }) {
             fontSize: 12,
             lineHeight: '16px',
             color: '#626165',
-            textAlign: 'right',
+            // Left-aligned per the rendered Figma 2222:40944, even
+            // though the auto-extracted code carries `text-right` —
+            // in the live design the date sits at the top-LEFT of
+            // the card, flush with the avatar / caption stack
+            // beneath it.
+            textAlign: 'left',
             letterSpacing: 0.3,
             whiteSpace: 'nowrap',
           }}
