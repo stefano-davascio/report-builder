@@ -1,33 +1,29 @@
 'use client';
 
 /**
- * Video engagement — horizontally-scrolling carousel of "video cards"
- * (Figma 2222:40922).  Each card is a self-contained 240 × 479 px
- * snapshot of a single post: timestamp, profile chip (32 px purple
- * monogram + black TikTok badge), caption (2-line ellipsis),
- * gradient thumbnail with centered white play triangle, and a 4-row
- * metric table (Views / Likes / Comments / Shares).
+ * Video watch metrics — sister carousel to `VideoEngagementModule`
+ * (Figma 2224:50487).  Same 240 × 479 card shell as Video
+ * engagement (details + 9 : 16 thumbnail with seeded preview
+ * image + summary table) so anything that lands on the engagement
+ * cards visually carries through here.
  *
- * Sister modules `tiktok-video-watch-metrics` (Figma 2224 family) and
- * `tiktok-video-sources` use a similar card chrome but ship their own
- * dedicated renderers per the design's "similar but with differences"
- * intent.  So this file owns the engagement-specific card and
- * carousel chrome only — it deliberately doesn't try to be a shared
- * primitive (yet).
+ * What differs vs Video engagement:
  *
- * Carousel mechanics
- *   • Native horizontal scroll on the strip (`overflow-x: auto`) so
- *     trackpad + mouse-wheel scroll both work without us re-implementing
- *     them.  `scroll-snap-type: x mandatory` snaps to each card.
- *   • The 48-px right-arrow button calls `scrollBy({left: 264})` =
- *     1 card width + 1 gap, advancing exactly one card per click.
- *   • Scrollbar hidden via the inherited `no-scrollbar` utility
- *     (defined in `app/globals.css`) — the visual signal that there's
- *     more is the floating arrow button, not a bar.
+ *   • The summary table reports WATCH-time metrics
+ *     (Watch time / Avg duration / Completion) instead of
+ *     engagement counts (Views / Likes / Comments / Shares).
+ *   • There are 3 metric rows rather than 4.
+ *   • Each row is 32 px tall (8 px top/bottom padding) instead of
+ *     24 px (4 px top/bottom padding) for a calmer visual rhythm
+ *     against the same 96 px Summary frame.
  *
- * Module footer carries only the network indicator (same right-pinned
- * cluster every other module uses); no legend swatches since there's
- * no series shared across cards.
+ * Sister `VideoEngagementModule` and the still-stubbed
+ * `tiktok-video-sources` carry their own dedicated files per the
+ * design's "similar but with differences" intent.  Keeping these
+ * three modules in separate files (rather than extracting a
+ * shared `VideoCard`) lets each evolve without dragging the
+ * others — at the cost of some duplicated card-rendering JSX
+ * that's easy enough to reconcile by hand.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -37,25 +33,15 @@ import { ModuleNetworks } from './ModuleNetworks';
 import { COMPACT_NETWORKS_THRESHOLD_PX } from './AudienceGrowthModule';
 import { IconArrowLeft, IconArrowRight } from '@/components/icons/SendiIcons';
 
-/**
- * Animated `scrollBy` that bypasses Chrome's broken native
- * `behavior: 'smooth'` on `scroll-snap-type: x mandatory`
- * containers (the snap engine ricochets the scroll back to the
- * current snap point mid-animation, so the strip never actually
- * moves).  Writes `scrollLeft` directly each animation frame —
- * snap-mandatory still kicks in at the END of the animation, but
- * since our `SCROLL_STEP` is an exact card stride we land on a
- * snap point anyway.
- *
- * Ease-out cubic over ~320 ms — fast enough that repeated clicks
- * feel responsive, slow enough that the cards visibly slide past.
- */
+/** Manual rAF-driven smooth scrollBy.  See the engagement module's
+ *  copy for the rationale (Chrome's native `behavior: 'smooth'` is
+ *  broken on `scroll-snap-type: x mandatory` containers). */
 function smoothScrollBy(el: HTMLElement, deltaX: number, durationMs = 320) {
   const start = el.scrollLeft;
   const startTime = performance.now();
   function tick() {
     const t = Math.min((performance.now() - startTime) / durationMs, 1);
-    const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+    const eased = 1 - Math.pow(1 - t, 3);
     el.scrollLeft = start + deltaX * eased;
     if (t < 1) requestAnimationFrame(tick);
   }
@@ -63,30 +49,15 @@ function smoothScrollBy(el: HTMLElement, deltaX: number, durationMs = 320) {
 }
 
 const CARD_WIDTH = 240;
-/** Thumbnail height per Figma 2222:40954 — 249 px.  Same as the
- *  original; the card chrome (and the surrounding preset layout)
- *  is built around this number. */
-const THUMB_HEIGHT = 249;
-/** Total card height per Figma 2222:40922 — sum of the three
- *  vertical sections (details 118 + thumbnail 249 + summary 112). */
 const CARD_HEIGHT = 479;
+const THUMB_HEIGHT = 249;
 const CARD_GAP = 24;
-/** One-click advance = exactly one card + one gap, so the next card
- *  lines up flush with the strip's left edge. */
 const SCROLL_STEP = CARD_WIDTH + CARD_GAP;
 
-// ── Inline SVG helpers ────────────────────────────────────────────────────
-// Two inline icons that don't have full-size equivalents in
-// `SendiIcons.tsx` because they only appear here:
-//   • TikTokBadge — 14 × 14 black circle with a 2 px white ring,
-//                   sitting bottom-right on the avatar.  The white
-//                   silhouette is a hand-simplified version of the
-//                   black-layer path from `IconNetworkTikTok`
-//                   (NetworkIcons.tsx) — the full multi-color glyph
-//                   would be illegible at 10 px.
-//   • PlayIcon   — 48 × 48 white triangle, no background fill, with a
-//                   drop-shadow so it reads cleanly on any gradient
-//                   thumbnail tint.
+// ── Inline SVG helpers — duplicated from VideoEngagementModule so
+// each carousel file is self-contained per the user's "do them
+// separately" guidance.  If the badge / play styling ever needs to
+// change across both, both files have to be touched.
 
 function TikTokBadge() {
   return (
@@ -94,11 +65,6 @@ function TikTokBadge() {
       aria-hidden
       className="absolute bg-black rounded-full"
       style={{
-        // Visual is exactly 14 × 14 with a 2 px white border eaten
-        // INTO the 14 (box-sizing: border-box) so the black core is
-        // 10 × 10. Previously used `boxShadow: 0 0 0 2px #fff` which
-        // painted the 2 px ring OUTSIDE the 14 — total visual was
-        // 18 × 18 and read as oversized vs Figma 2222:40948.
         bottom: -3,
         left: 19,
         width: 14,
@@ -111,10 +77,6 @@ function TikTokBadge() {
         viewBox="0 0 17 20"
         width={8}
         height={8}
-        // Position absolute is relative to the padding edge (= inner
-        // 10 × 10 black area). (1, 1) centers an 8 × 8 glyph inside
-        // that 10 × 10, leaving 1 px of black breathing room on every
-        // side so the "d" silhouette doesn't kiss the white ring.
         style={{ position: 'absolute', left: 1, top: 1 }}
       >
         <path
@@ -128,19 +90,7 @@ function TikTokBadge() {
 
 function PlayIcon() {
   return (
-    <svg
-      viewBox="0 0 48 48"
-      width={48}
-      height={48}
-      fill="none"
-      aria-hidden
-    >
-      {/* Hollow 28 × 36 triangle, stroked at 3 px with rounded
-          line caps + joins — matches the Figma play icon the user
-          supplied directly.  Stroke colour is `#D2D2D3`
-          (DARK/dark--tint_80) so the outline reads as a soft
-          decorative play affordance on any gradient thumbnail
-          rather than competing with the content. */}
+    <svg viewBox="0 0 48 48" width={48} height={48} fill="none" aria-hidden>
       <path
         d="M14 6L42 24L14 42V6Z"
         stroke="#D2D2D3"
@@ -151,18 +101,6 @@ function PlayIcon() {
     </svg>
   );
 }
-
-// ── Carousel "next" button ────────────────────────────────────────────────
-// Floating 48 × 48 circle pinned to the strip's right edge.  The
-// shadow stack matches Figma's "Elevation 3" effect (3 stacked drop
-// shadows — 1/9, 6/5, 3/2.5 px).  Hover treatment kept minimal — the
-// button is the only affordance on the carousel so the user
-// shouldn't have to hunt for it.
-
-// Shared 48 × 48 floating "scroll one card" affordance.  Used twice
-// per carousel — once pinned to the left edge (prev) and once to the
-// right (next).  Same shadow + border + hover treatment per Figma
-// 2224:50682; the prev variant just flips the icon and edge anchor.
 
 function CarouselScrollButton({
   side,
@@ -195,7 +133,7 @@ function CarouselScrollButton({
   );
 }
 
-// ── Single card ───────────────────────────────────────────────────────────
+// ── Card ──────────────────────────────────────────────────────────────────
 
 function VideoCard({ card }: { card: VideoCardData }) {
   return (
@@ -207,7 +145,7 @@ function VideoCard({ card }: { card: VideoCardData }) {
         scrollSnapAlign: 'start',
       }}
     >
-      {/* Details — date row + profile chip + caption */}
+      {/* Details — date + profile chip + 2-line caption */}
       <div
         className="flex flex-col items-start w-full"
         style={{ padding: '8px 16px', gap: 8 }}
@@ -219,11 +157,6 @@ function VideoCard({ card }: { card: VideoCardData }) {
             fontSize: 12,
             lineHeight: '16px',
             color: '#626165',
-            // Left-aligned per the rendered Figma 2222:40944, even
-            // though the auto-extracted code carries `text-right` —
-            // in the live design the date sits at the top-LEFT of
-            // the card, flush with the avatar / caption stack
-            // beneath it.
             textAlign: 'left',
             letterSpacing: 0.3,
             whiteSpace: 'nowrap',
@@ -232,7 +165,6 @@ function VideoCard({ card }: { card: VideoCardData }) {
           {card.date}
         </p>
         <div className="flex items-start gap-[8px] w-full">
-          {/* Avatar — 32 × 32 purple square with monogram + TikTok badge */}
           <div
             className="relative flex items-center justify-center flex-shrink-0"
             style={{
@@ -257,7 +189,6 @@ function VideoCard({ card }: { card: VideoCardData }) {
             </span>
             <TikTokBadge />
           </div>
-          {/* Profile name + handle */}
           <div
             className="flex flex-col justify-center min-w-0"
             style={{ paddingLeft: 4, height: 32 }}
@@ -288,9 +219,6 @@ function VideoCard({ card }: { card: VideoCardData }) {
             </p>
           </div>
         </div>
-        {/* Caption — 2-line ellipsis truncation, fixed 36 px box so the
-            details section's height stays constant card-to-card
-            regardless of caption length. */}
         <p
           style={{
             fontFamily: 'IBM Plex Sans, sans-serif',
@@ -309,13 +237,9 @@ function VideoCard({ card }: { card: VideoCardData }) {
           {card.caption}
         </p>
       </div>
-      {/* Attachment — gradient backdrop with a centered 9 : 16
-          TikTok video preview filling the full thumbnail height.
-          The outer 240 × 249 thumbnail stays Figma-spec; inside, the
-          140 × 249 dark preview reads as a TikTok-aspect video frame
-          (140 / 249 = 0.5622 ≈ 9 / 16 = 0.5625) with the gradient
-          showing through as a 50 px backdrop on each side, the way
-          TikTok feeds letterbox portrait videos. */}
+      {/* Attachment — same 9 : 16 letterbox treatment as the
+          engagement carousel.  Gradient backdrop + centered 140 × 249
+          dark inner preview with seeded picsum image. */}
       <div
         className="relative flex items-center justify-center flex-shrink-0"
         style={{
@@ -327,27 +251,21 @@ function VideoCard({ card }: { card: VideoCardData }) {
         <div
           className="relative flex items-center justify-center"
           style={{
-            // Exact 9 : 16 at the thumbnail's 249 px height.
             width: 140,
             height: THUMB_HEIGHT,
-            // Per-card placeholder image (picsum.photos seeded
-            // JPEG, see `VIDEO_PREVIEW_IMAGE` in mock-data.ts) so
-            // every card reads as a different post.  `#1A1A1F` is
-            // the fallback fill while the image streams in, so the
-            // first-paint frame still reads as a paused video
-            // rather than flashing white before the image
-            // resolves.  `background-size: cover` crops the
-            // landscape source to the portrait inset without
-            // distorting it.
             background: `#1A1A1F url(${card.image}) center/cover no-repeat`,
           }}
         >
           <PlayIcon />
         </div>
       </div>
-      {/* Summary — 4-row metric table.  Each row has a bottom border
-          except the last, matching the Figma's `border-b` on rows 1–3
-          and no border on the final Shares row. */}
+      {/* Summary — 3-row metric table, each row 32 px tall (8 px
+          top/bottom padding) per Figma 2224:50523.  Dividers between
+          rows, no divider after the final row.  Rows breathe more
+          than the engagement carousel's 24-px rows to balance the
+          shorter list (3 rows × 32 = 96, identical to the
+          engagement's 4 × 24 = 96 — same Summary frame, different
+          rhythm). */}
       <div
         className="flex flex-col flex-shrink-0 w-full"
         style={{ padding: '8px 16px' }}
@@ -358,7 +276,7 @@ function VideoCard({ card }: { card: VideoCardData }) {
             className="flex items-start w-full"
             style={{
               gap: 4,
-              padding: '4px 0',
+              padding: '8px 0',
               borderBottom:
                 i < card.metrics.length - 1 ? '1px solid #E8E8E9' : 'none',
             }}
@@ -400,31 +318,23 @@ function VideoCard({ card }: { card: VideoCardData }) {
 
 // ── Module ────────────────────────────────────────────────────────────────
 
-interface VideoEngagementModuleProps {
+interface VideoWatchMetricsModuleProps {
   cards: VideoCardData[];
   contentHeight: number;
   contentWidth?: number;
   profiles?: MockProfile[];
 }
 
-export function VideoEngagementModule({
+export function VideoWatchMetricsModule({
   cards,
-  // contentHeight is destructured so the prop contract matches the
-  // other chart modules' signature, even though the carousel height
-  // is driven by `h-full` on the inner strip (no responsive
-  // re-layout needed at this card size).
   contentHeight: _contentHeight,
   contentWidth = 0,
   profiles = [],
-}: VideoEngagementModuleProps) {
+}: VideoWatchMetricsModuleProps) {
   const stripRef = useRef<HTMLDivElement>(null);
 
-  // Track which scroll directions still have content to reveal so we
-  // can hide the prev / next buttons when there's nothing in that
-  // direction.  `canPrev` starts false (the strip mounts at
-  // scrollLeft = 0); `canNext` starts true on the assumption there's
-  // overflow, and `update()` corrects on the first frame if the
-  // module is wide enough to show every card without scrolling.
+  // Hide the prev / next buttons when there's nothing in their
+  // direction.  See the engagement module's copy for rationale.
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(true);
 
@@ -434,17 +344,11 @@ export function VideoEngagementModule({
     const update = () => {
       const left = el.scrollLeft;
       const max = el.scrollWidth - el.clientWidth;
-      // 1 px tolerance for fractional scroll positions (snap +
-      // sub-pixel rendering can leave the scroll position 0.5 px
-      // short of an edge).
       setCanPrev(left > 1);
       setCanNext(left < max - 1);
     };
     update();
     el.addEventListener('scroll', update, { passive: true });
-    // Re-evaluate when the module is resized (the user can drag the
-    // grid corner to widen the carousel; if it becomes wide enough
-    // to fit every card the next button should disappear).
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => {
@@ -463,15 +367,6 @@ export function VideoEngagementModule({
 
   return (
     <div className="flex flex-col h-full w-full">
-      {/* Scroll strip + floating right-arrow button.  `relative` so
-          the button can anchor to the right edge of the strip
-          regardless of how far the user has scrolled.
-          Container height is pinned to `CARD_HEIGHT` so the button's
-          50 % top-anchor lines up with the card's vertical center
-          (a taller container would float the button below the
-          cards). `items-start` on the strip is belt-and-braces so a
-          card whose intrinsic height differs from `CARD_HEIGHT`
-          still doesn't pull the strip taller. */}
       <div
         className="relative flex-shrink-0 w-full overflow-hidden"
         style={{ height: CARD_HEIGHT }}
@@ -494,14 +389,9 @@ export function VideoEngagementModule({
         {canNext && <CarouselScrollButton side="next" onClick={handleNext} />}
       </div>
       {/* Footer — networks indicator only, right-aligned.  `mt-auto`
-          pushes it to the bottom of the module's content area so
-          the TikTok glyph lands flush with the module's bottom
-          edge per Figma 2222:41201 (footer bottom at y=523 in the
-          523-tall content frame).  Any slack between the carousel's
-          fixed height and the module's actual content height shows
-          as quiet whitespace BETWEEN the carousel and the footer,
-          rather than below the footer where it reads as a stray
-          margin. */}
+          pushes it flush with the module's bottom edge per the
+          Figma footer placement; slack appears between the
+          carousel and the footer rather than below it. */}
       <div
         className="flex flex-wrap items-center justify-end w-full flex-shrink-0 mt-auto"
         style={{ paddingTop: 16, columnGap: 24, rowGap: 16 }}

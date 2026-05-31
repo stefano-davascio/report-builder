@@ -497,26 +497,33 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   {
     id: 'tiktok-best-performing-day-summary',
     name: 'Best performing day summary',
-    description: 'Top-N performing days within the selected window, ranked by total views.',
+    description: 'Quick summary of the selected period — total published videos, most frequent posting day and time.',
     platforms: ['tiktok'],
     supportedChartTypes: ['list'],
     defaultChartType: 'list',
     category: 'TikTok',
     icon: '🏆',
     defaultW: 2,
-    defaultH: 18,
+    // h=12 (= 296 px painted) matches the Figma 2313:51150 frame
+    // (1237 × 296), same compact summary-card height as the
+    // sister `tiktok-best-performing-day` and `tiktok-best-engaging-day`
+    // modules — was 18 when this slot was a ranked-list stub.
+    defaultH: 12,
   },
   {
     id: 'tiktok-followers-online-summary',
     name: 'Followers online summary',
-    description: 'Hours / days where the most followers are active, summarized as a ranked list.',
+    description: 'Median hour / day when the most followers are online during the selected period.',
     platforms: ['tiktok'],
     supportedChartTypes: ['list'],
     defaultChartType: 'list',
     category: 'TikTok',
     icon: '🕒',
     defaultW: 2,
-    defaultH: 18,
+    // h=12 (= 296 px painted) matches Figma 2313:51223 — same
+    // compact 2-row summary card height as the sister
+    // `tiktok-best-performing-day-summary` redesign.
+    defaultH: 12,
   },
   {
     id: 'tiktok-video-engagement',
@@ -535,6 +542,11 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     // footer + 16 px gap eats ~52 px, leaving ~15 px of breathing
     // room at the bottom.
     defaultH: 24,
+    // Vertical resize is meaningless for this module — each card is
+    // a fixed 240 × 479 px, so dragging the corner taller just adds
+    // invisible padding above the footer.  Lock at defaultH so the
+    // corner grip only changes width.
+    fixedHeight: true,
   },
   {
     id: 'tiktok-video-watch-metrics',
@@ -547,6 +559,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     icon: '⏱️',
     defaultW: 4,
     defaultH: 24,
+    fixedHeight: true,
   },
   {
     id: 'tiktok-video-sources',
@@ -559,6 +572,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     icon: '🔀',
     defaultW: 4,
     defaultH: 24,
+    fixedHeight: true,
   },
 ];
 
@@ -668,6 +682,29 @@ export const MOCK_BEST_PERFORMING_DAY_ROWS = [
   { label: 'Total engagement', value: '731' },
   { label: 'Previous period', value: '221' },
   { label: 'Growth',          value: '+510 (+230%)', trend: 'up' as const },
+];
+
+// Summary-card rows for the `tiktok-best-performing-day-summary`
+// module per Figma 2313:51150.  Three flat label/value rows — no
+// trend chip — sharing the same `SummaryCardModule` renderer the
+// other summary cards use.  Was previously a ranked-list module
+// rendering 5 days of `MOCK_LIST_DATA['tiktok-best-performing-day-summary']`;
+// the redesign swapped the visual to this compact summary table.
+export const MOCK_BEST_PERFORMING_DAY_SUMMARY_ROWS = [
+  { label: 'Total published videos', value: '2' },
+  { label: 'Most frequent day',      value: 'Wednesday' },
+  { label: 'Most frequent time',     value: '13:00:00' },
+];
+
+// Summary-card rows for the `tiktok-followers-online-summary`
+// module per Figma 2313:51223.  Two flat label/value rows —
+// median posting hour and weekday across the selected period.
+// Same `SummaryCardModule` renderer as the sister summary
+// modules; was previously a 5-row ranked-list stub before the
+// redesign.
+export const MOCK_FOLLOWERS_ONLINE_SUMMARY_ROWS = [
+  { label: 'Median followers online by hour of the day',  value: '9 PM'   },
+  { label: 'Median followers online by day of the period', value: 'Sunday' },
 ];
 
 // Metric-card headline data. Each entry is an array of headline metrics —
@@ -980,6 +1017,105 @@ export const MOCK_VIDEO_ENGAGEMENT_CARDS: VideoCardData[] = [
   },
 ];
 
+// ─── Video watch metrics carousel ──────────────────────────────────────────
+//
+// Same set of videos as the engagement carousel — same profiles,
+// captions, thumbnails, and preview images — but the summary table
+// reports WATCH-time-related metrics instead of engagement counts
+// (Figma 2224:50487).  Three metric rows per card (Watch time, Avg
+// duration, Completion) and each row is 32 px tall (vs the
+// engagement variant's 24 px) for breathing room.  The card itself
+// still measures 240 × 479; only the summary section's row heights
+// and count change.
+//
+// Values are hand-tuned to be plausibly proportional to the
+// engagement deck (cards with higher engagement also report higher
+// watch metrics) so the two carousels read as "same videos, two
+// angles" rather than two unrelated datasets.
+const VIDEO_WATCH_METRICS_VALUES: Array<{
+  watchTime: string;
+  avgDuration: string;
+  completion: string;
+}> = [
+  { watchTime: '12.4h', avgDuration: '0:42', completion: '74%' },
+  { watchTime: '11.1h', avgDuration: '0:39', completion: '70%' },
+  { watchTime: '9.6h',  avgDuration: '0:36', completion: '67%' },
+  { watchTime: '8.4h',  avgDuration: '0:34', completion: '64%' },
+  { watchTime: '7.2h',  avgDuration: '0:32', completion: '61%' },
+  { watchTime: '6.1h',  avgDuration: '0:30', completion: '58%' },
+  { watchTime: '5.2h',  avgDuration: '0:28', completion: '55%' },
+  { watchTime: '4.0h',  avgDuration: '0:25', completion: '52%' },
+];
+
+export const MOCK_VIDEO_WATCH_METRICS_CARDS: VideoCardData[] =
+  MOCK_VIDEO_ENGAGEMENT_CARDS.map((card, i) => {
+    const m = VIDEO_WATCH_METRICS_VALUES[i] ?? VIDEO_WATCH_METRICS_VALUES[0];
+    return {
+      ...card,
+      // Use a distinct id namespace so React's reconciler doesn't
+      // share state between the two carousels when both are on the
+      // same canvas (e.g. scroll position, hover, etc.).
+      id: `vwm-${i + 1}`,
+      metrics: [
+        { label: 'Watch time',   value: m.watchTime },
+        { label: 'Avg duration', value: m.avgDuration },
+        { label: 'Completion',   value: m.completion },
+      ],
+    };
+  });
+
+// ─── Video sources carousel ────────────────────────────────────────────────
+//
+// Same set of videos as the engagement / watch-metrics decks but the
+// summary table reports WHERE the views came from in the TikTok
+// surface (Figma 2222:48693).  Seven metric rows per card, each
+// 24 px tall — same row height as the engagement deck, just more
+// of them, so the thumbnail shrinks from 249 → 177 px to make
+// room and the card overall stays 479 px tall.
+//
+// The early cards (higher engagement) skew almost all of their
+// views to the For You feed, which is the typical viral pattern.
+// Later, lower-engagement cards drift toward more diverse source
+// mixes (more Search, more Personal profile, more Sound) — the
+// way a video that didn't go viral but found a niche audience
+// would distribute its source attribution.
+const VIDEO_SOURCES_VALUES: Array<{
+  directMessage: string;
+  follow: string;
+  forYou: string;
+  others: string;
+  personalProfile: string;
+  search: string;
+  sound: string;
+}> = [
+  { directMessage: '0.1%', follow: '0%',   forYou: '98.4%', others: '0.1%', personalProfile: '0.7%', search: '0.7%', sound: '0%'   },
+  { directMessage: '0.2%', follow: '0.1%', forYou: '96.8%', others: '0.2%', personalProfile: '0.8%', search: '1.7%', sound: '0.2%' },
+  { directMessage: '0.1%', follow: '0.2%', forYou: '95.1%', others: '0.1%', personalProfile: '0.4%', search: '1.1%', sound: '3.0%' },
+  { directMessage: '0.3%', follow: '0.1%', forYou: '94.2%', others: '0.2%', personalProfile: '0.5%', search: '4.0%', sound: '0.7%' },
+  { directMessage: '0.5%', follow: '0.3%', forYou: '92.7%', others: '0.3%', personalProfile: '1.2%', search: '4.0%', sound: '1.0%' },
+  { directMessage: '0.8%', follow: '0.5%', forYou: '91.0%', others: '0.4%', personalProfile: '1.8%', search: '4.5%', sound: '1.0%' },
+  { directMessage: '1.2%', follow: '0.7%', forYou: '88.5%', others: '0.6%', personalProfile: '2.3%', search: '5.5%', sound: '1.2%' },
+  { directMessage: '1.8%', follow: '1.0%', forYou: '85.2%', others: '0.8%', personalProfile: '3.1%', search: '6.5%', sound: '1.6%' },
+];
+
+export const MOCK_VIDEO_SOURCES_CARDS: VideoCardData[] =
+  MOCK_VIDEO_ENGAGEMENT_CARDS.map((card, i) => {
+    const s = VIDEO_SOURCES_VALUES[i] ?? VIDEO_SOURCES_VALUES[0];
+    return {
+      ...card,
+      id: `vs-${i + 1}`,
+      metrics: [
+        { label: 'Direct message',   value: s.directMessage },
+        { label: 'Follow',           value: s.follow },
+        { label: 'For you',          value: s.forYou },
+        { label: 'Others',           value: s.others },
+        { label: 'Personal profile', value: s.personalProfile },
+        { label: 'Search',           value: s.search },
+        { label: 'Sound',            value: s.sound },
+      ],
+    };
+  });
+
 // Pie / donut data. Platform-specific audience modules
 // (instagram-audience, tiktok-audience) render an age-bucket breakdown;
 // cross-network audience-by-gender has its own 3-wedge key.
@@ -1146,71 +1282,83 @@ export const MOCK_BUBBLE_DATA: Record<string, BubblePoint[]> = {
   // 10/10 = 1.00 → high. Read each row as a single day's vertical
   // strip — `[hour, band]` pairs ordered bottom-up so the file mirrors
   // how the chart reads visually (1 AM at the bottom of the column).
+  // Hand-curated Publishing Behaviour bubbles per Figma 2238:52609.
+  // x = day-of-week (0=Sun … 6=Sat, plotted Sun-first); y = value
+  // (0-1000) — the `hour` field is reinterpreted by
+  // `PublishingBehaviorModule` as the generic y-value, and the
+  // `value` field drives BOTH the color-band classification and
+  // the continuous bubble size (via Recharts ZAxis), so each
+  // entry's `hour` and `value` are intentionally set to the same
+  // number.  Distribution roughly mirrors the Figma's per-day
+  // bubble count and value spread (Fri / Sat are the busiest
+  // days with 8-9 bubbles each; Sun anchors with 3).
   'tiktok-publishing-behaviour': (() => {
-    const HIGH = 10, MID = 5, LOW = 2;
     type Pt = { day: number; hour: number; value: number };
     const pts: Pt[] = [];
-    const add = (day: number, hour: number, v: number) =>
-      pts.push({ day, hour, value: v });
+    const add = (day: number, value: number) =>
+      pts.push({ day, hour: value, value });
 
-    // Mon (day=1) — sparse anchor day per user spec: 3 AM low,
-    // 8 AM high, 10 PM high.
-    add(1, 3,  LOW);
-    add(1, 8,  HIGH);
-    add(1, 22, HIGH);
+    // Sun (day=0) — sparse, anchored by a high-magnitude post.
+    add(0, 900);
+    add(0, 400);
+    add(0, 150);
 
-    // Tue (day=2) — heaviest mid-day cluster in the comp; biggest
-    // bubble of the whole grid sits at noon.
-    add(2, 6,  LOW);
-    add(2, 8,  HIGH);
-    add(2, 12, HIGH);
-    add(2, 15, MID);
-    add(2, 17, MID);
-    add(2, 21, MID);
+    // Mon (day=1) — six-bubble fan with two large mid-range
+    // posts (~560, ~390) and one near the ceiling.
+    add(1, 950);
+    add(1, 850);
+    add(1, 700);
+    add(1, 560);
+    add(1, 390);
+    add(1, 270);
 
-    // Wed (day=3) — early-morning High cluster + scattered mids.
-    add(3, 4,  HIGH);
-    add(3, 5,  HIGH);
-    add(3, 7,  MID);
-    add(3, 9,  MID);
-    add(3, 12, HIGH);
-    add(3, 14, LOW);
-    add(3, 16, MID);
-    add(3, 17, HIGH);
+    // Tue (day=2) — broad spread from ~160 to ~850.
+    add(2, 850);
+    add(2, 780);
+    add(2, 600);
+    add(2, 340);
+    add(2, 250);
+    add(2, 160);
 
-    // Thu (day=4) — almost all High, mid-morning through evening.
-    add(4, 7,  LOW);
-    add(4, 9,  HIGH);
-    add(4, 10, HIGH);
-    add(4, 15, HIGH);
-    add(4, 21, HIGH);
+    // Wed (day=3) — clustered around 400-700 with one ~970 outlier.
+    add(3, 970);
+    add(3, 700);
+    add(3, 560);
+    add(3, 430);
+    add(3, 310);
 
-    // Fri (day=5) — late-night peak (high at midnight wrap), morning
-    // High, light afternoon.
-    add(5, 5,  LOW);
-    add(5, 6,  MID);
-    add(5, 9,  HIGH);
-    add(5, 18, LOW);
-    add(5, 19, MID);
-    add(5, 23, HIGH);
+    // Thu (day=4) — three top-band posts + an evenly spaced lower stack.
+    add(4, 900);
+    add(4, 860);
+    add(4, 800);
+    add(4, 440);
+    add(4, 330);
+    add(4, 200);
+    add(4, 130);
 
-    // Sat (day=6) — busy lunch + late-night Mid, mostly mid-band.
-    add(6, 3,  LOW);
-    add(6, 5,  MID);
-    add(6, 7,  HIGH);
-    add(6, 8,  MID);
-    add(6, 11, MID);
-    add(6, 12, MID);
-    add(6, 13, HIGH);
-    add(6, 23, MID);
+    // Fri (day=5) — busiest day in the design, nine bubbles
+    // spanning ~70 to ~970 with a notable mid-range trio.
+    add(5, 970);
+    add(5, 920);
+    add(5, 720);
+    add(5, 630);
+    add(5, 500);
+    add(5, 370);
+    add(5, 290);
+    add(5, 170);
+    add(5, 70);
 
-    // Sun (day=0) — early-morning Highs, light evening.
-    add(0, 1,  HIGH);
-    add(0, 3,  HIGH);
-    add(0, 7,  MID);
-    add(0, 9,  HIGH);
-    add(0, 19, MID);
-    add(0, 23, LOW);
+    // Sat (day=6) — also nine bubbles, with the highest single
+    // post in the whole deck (~980) and a low-band tail (~70).
+    add(6, 980);
+    add(6, 940);
+    add(6, 610);
+    add(6, 510);
+    add(6, 430);
+    add(6, 390);
+    add(6, 250);
+    add(6, 100);
+    add(6, 70);
 
     return pts;
   })(),

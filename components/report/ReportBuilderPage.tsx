@@ -501,6 +501,7 @@ export function ReportBuilderPage({
       // Clamp so a drop near the right edge doesn't produce an out-of-bounds
       // x + w combination.
       const clampedX = Math.max(0, Math.min(x, 4 - w));
+      const layoutH = definition.defaultH * CHART_H_FACTOR;
       const newModule: ReportModule = {
         id: newId,
         definitionId: definition.id,
@@ -517,11 +518,18 @@ export function ReportBuilderPage({
           y: Math.max(0, y),
           w,
           // OLD→NEW units: see CHART_H_FACTOR comment at top of file.
-          h: definition.defaultH * CHART_H_FACTOR,
+          h: layoutH,
           minW: 1,
-          // 1 Figma cell (140 px visible) = 78 grid rows under
-          // ReportCanvas's rowHeight=2 / 16 px transparent bottom-gap.
-          minH: CHART_MIN_H,
+          // Height bounds — `fixedHeight` modules (video carousels,
+          // anything whose visible content is a constant pixel size)
+          // clamp BOTH minH and maxH to the layout's h so the SE
+          // corner grip can only change width, never height.  The
+          // handle stays the same SE corner everywhere for visual
+          // consistency.  Otherwise default to CHART_MIN_H
+          // (1 Figma cell = 78 NEW rows = 140 px visible) as the
+          // lower bound.
+          minH: definition.fixedHeight ? layoutH : CHART_MIN_H,
+          ...(definition.fixedHeight ? { maxH: layoutH } : {}),
         },
       };
       setModules((prev) => [...prev, newModule]);

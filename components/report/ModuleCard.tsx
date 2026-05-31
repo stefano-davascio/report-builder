@@ -33,6 +33,8 @@ import {
 } from './InteractionsByDayModule';
 import { SummaryCardModule } from './SummaryCardModule';
 import { VideoEngagementModule } from './VideoEngagementModule';
+import { VideoWatchMetricsModule } from './VideoWatchMetricsModule';
+import { VideoSourcesModule } from './VideoSourcesModule';
 import { ModuleActions } from './ModuleActions';
 import { cn } from '@/lib/utils';
 import {
@@ -47,7 +49,11 @@ import {
   MOCK_INTERACTIONS_BY_DAY,
   MOCK_BEST_ENGAGING_DAY_ROWS,
   MOCK_BEST_PERFORMING_DAY_ROWS,
+  MOCK_BEST_PERFORMING_DAY_SUMMARY_ROWS,
+  MOCK_FOLLOWERS_ONLINE_SUMMARY_ROWS,
   MOCK_VIDEO_ENGAGEMENT_CARDS,
+  MOCK_VIDEO_WATCH_METRICS_CARDS,
+  MOCK_VIDEO_SOURCES_CARDS,
   CHART_COLORS,
 } from '@/lib/mock-data';
 
@@ -203,6 +209,30 @@ function getModuleContent(
         />
       );
     }
+    // Compact 3-row summary card (Figma 2313:51150).  Same
+    // `SummaryCardModule` shell as the other best-day summaries;
+    // payload is `MOCK_BEST_PERFORMING_DAY_SUMMARY_ROWS` (Total
+    // published videos / Most frequent day / Most frequent time).
+    if (definitionId === 'tiktok-best-performing-day-summary') {
+      return (
+        <SummaryCardModule
+          rows={MOCK_BEST_PERFORMING_DAY_SUMMARY_ROWS}
+          contentWidth={contentWidth}
+          profiles={profilesForModule}
+        />
+      );
+    }
+    // Sister 2-row summary card (Figma 2313:51223).  Median
+    // posting hour + weekday across the selected period.
+    if (definitionId === 'tiktok-followers-online-summary') {
+      return (
+        <SummaryCardModule
+          rows={MOCK_FOLLOWERS_ONLINE_SUMMARY_ROWS}
+          contentWidth={contentWidth}
+          profiles={profilesForModule}
+        />
+      );
+    }
     // Horizontally-scrolling video-card carousel (Figma 2222:40922).
     // Bespoke renderer; not list-shaped despite living under
     // `chartType === 'list'` for catalog/preset compatibility with
@@ -213,6 +243,35 @@ function getModuleContent(
       return (
         <VideoEngagementModule
           cards={MOCK_VIDEO_ENGAGEMENT_CARDS}
+          contentHeight={contentHeight}
+          contentWidth={contentWidth}
+          profiles={profilesForModule}
+        />
+      );
+    }
+    // Sister carousel (Figma 2224:50487).  Same 240 × 479 card shell
+    // as Video engagement but the summary table reports watch-time
+    // metrics (3 rows × 32 px) instead of engagement counts
+    // (4 rows × 24 px).
+    if (definitionId === 'tiktok-video-watch-metrics') {
+      return (
+        <VideoWatchMetricsModule
+          cards={MOCK_VIDEO_WATCH_METRICS_CARDS}
+          contentHeight={contentHeight}
+          contentWidth={contentWidth}
+          profiles={profilesForModule}
+        />
+      );
+    }
+    // Sister carousel (Figma 2222:48693).  Same 240 × 479 card
+    // shell as the other two video carousels but the thumbnail
+    // gives up 72 px (249 → 177) to make room for a 7-row
+    // source-attribution summary (Direct message / Follow /
+    // For you / Others / Personal profile / Search / Sound).
+    if (definitionId === 'tiktok-video-sources') {
+      return (
+        <VideoSourcesModule
+          cards={MOCK_VIDEO_SOURCES_CARDS}
           contentHeight={contentHeight}
           contentWidth={contentWidth}
           profiles={profilesForModule}

@@ -68,16 +68,22 @@ const RAW_DEFAULT_MODULES: ReportModule[] = [
 
 // ── OLD→NEW-units transform ──────────────────────────────────────────────
 //
-// Scale chart-shaped modules' vertical layout fields (y, h, minH) by
-// `CHART_H_FACTOR`. Mirrors the constant of the same name in
-// ReportCanvas.tsx — keep the two in sync. Mid-row text/heading elements
-// inside a saved layout (those carry `elementKind`) are passed through
-// unchanged because their h is already in NEW-units.
+// Scale chart-shaped modules' vertical layout fields (y, h, minH,
+// maxH) by `CHART_H_FACTOR`. Mirrors the constant of the same name
+// in ReportCanvas.tsx — keep the two in sync. Mid-row text/heading
+// elements inside a saved layout (those carry `elementKind`) are
+// passed through unchanged because their h is already in NEW-units.
+//
+// `maxH` MUST be scaled alongside the others or the upper bound
+// effectively collapses to a few rows in NEW-units (e.g. `maxH: 24`
+// OLD = 4 cells, but if not scaled it becomes 24 NEW rows = ~48 px
+// painted height, which lets a corner-grip resize shrink a
+// height-locked module mid-drag before snapping back).
 const CHART_H_FACTOR = 13;
 export function scaleChartLayout(modules: ReportModule[]): ReportModule[] {
   return modules.map((m) => {
     if (m.elementKind) return m;
-    const { y, h, minH, ...rest } = m.layout;
+    const { y, h, minH, maxH, ...rest } = m.layout;
     return {
       ...m,
       layout: {
@@ -85,6 +91,7 @@ export function scaleChartLayout(modules: ReportModule[]): ReportModule[] {
         y: y * CHART_H_FACTOR,
         h: h * CHART_H_FACTOR,
         ...(minH !== undefined ? { minH: minH * CHART_H_FACTOR } : {}),
+        ...(maxH !== undefined ? { maxH: maxH * CHART_H_FACTOR } : {}),
       },
     };
   });

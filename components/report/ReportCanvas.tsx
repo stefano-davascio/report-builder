@@ -660,6 +660,23 @@ export function ReportCanvas({
         // valid cell.
         minH: m.layout.minH ?? GHOST_CELL_ROWS,
         maxW: cols,
+        // Optional per-module height ceiling.  Set on modules whose
+        // visible content is a fixed pixel size (e.g. the video
+        // carousels, where each card is a constant 479 px tall and
+        // dragging the corner taller would just add invisible
+        // padding above the footer).  When `maxH === minH === h`,
+        // RGL clamps vertical resize to that value so only width
+        // changes during a corner drag.
+        ...(m.layout.maxH !== undefined ? { maxH: m.layout.maxH } : {}),
+        // Per-item resize-handle override — the video carousels
+        // request `['e']` (right edge only) so the user can only
+        // drag the width.  Letting them grab the SE corner with a
+        // locked maxH paints a misleading vertical ghost across the
+        // canvas (the placeholder visibly tries to grow, then
+        // snaps back).
+        ...(m.layout.resizeHandles !== undefined
+          ? { resizeHandles: m.layout.resizeHandles }
+          : {}),
         ...(isEditMode ? {} : { static: true }),
       };
     });

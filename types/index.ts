@@ -47,6 +47,15 @@ export interface ModuleDefinition {
   icon: string;
   defaultW: number;
   defaultH: number;
+  /**
+   * When `true`, the module's height is locked at `defaultH` — drops
+   * and resizes set `minH === maxH === defaultH * CHART_H_FACTOR` so
+   * the corner-grip drag only changes width, never height.  Used by
+   * fixed-pixel-content modules like the video carousels where each
+   * card is a constant 240 × 479 px and vertical resize would just
+   * stretch invisible padding around the same content.
+   */
+  fixedHeight?: boolean;
 }
 
 export interface LayoutItem {
@@ -59,6 +68,15 @@ export interface LayoutItem {
   minH?: number;
   maxW?: number;
   maxH?: number;
+  /**
+   * Per-item override of which resize-handle edges/corners react-
+   * grid-layout draws.  Defaults to `['se']` (bottom-right corner)
+   * across the rest of the canvas; the three video carousels set
+   * `['e']` so the user can only drag the right edge — the modules
+   * have a fixed height, so a corner grip + visible ghost-cell
+   * grid that LOOKS vertical-resizable is misleading.
+   */
+  resizeHandles?: ('s' | 'w' | 'e' | 'n' | 'sw' | 'nw' | 'se' | 'ne')[];
 }
 
 export interface ReportModule {

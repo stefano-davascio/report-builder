@@ -163,9 +163,9 @@ function presetTikTokOnly(): ReportModule[] {
 
     // Row 4 (y=48, h=18) — summary list pair.
     { id: 'mod-tt-best-perf-summary',  definitionId: 'tiktok-best-performing-day-summary', chartType: 'list',
-      layout: { i: 'mod-tt-best-perf-summary',  x: 0, y: 48, w: 2, h: 18, minW: 1, minH: 12 } },
+      layout: { i: 'mod-tt-best-perf-summary',  x: 0, y: 48, w: 2, h: 12, minW: 1, minH: 12 } },
     { id: 'mod-tt-fol-online-summary', definitionId: 'tiktok-followers-online-summary',    chartType: 'list',
-      layout: { i: 'mod-tt-fol-online-summary', x: 2, y: 48, w: 2, h: 18, minW: 1, minH: 12 } },
+      layout: { i: 'mod-tt-fol-online-summary', x: 2, y: 48, w: 2, h: 12, minW: 1, minH: 12 } },
 
     // Row 5 (y=66, h=18) — daily-trend pair.
     { id: 'mod-tt-views-by-day',       definitionId: 'tiktok-video-views-by-day',   chartType: 'area',
@@ -180,16 +180,18 @@ function presetTikTokOnly(): ReportModule[] {
       layout: { i: 'mod-tt-best-eng',           x: 2, y: 84, w: 2, h: 12, minW: 1, minH: 12 } },
 
     // Rows 7–9 (y=96 / 120 / 144, h=24 each) — video carousels
-    // stacked full-width.  Video engagement renders the Figma
-    // 2222:40922 240 × 479 card strip; watch metrics + sources are
-    // still on the legacy ListModule render until their dedicated
-    // components land.
+    // stacked full-width.  Each card is a Figma-spec 240 × 479 px,
+    // so the module's height is fully determined by the card +
+    // footer + chrome (h=24 lands flush).  `minH === maxH === 24`
+    // locks the height during a corner-drag resize so only the
+    // width changes — vertical resize would just stretch invisible
+    // padding above the footer with no visible effect.
     { id: 'mod-tt-vid-engagement',     definitionId: 'tiktok-video-engagement',     chartType: 'list',
-      layout: { i: 'mod-tt-vid-engagement',     x: 0, y: 96,  w: 4, h: 24, minW: 1, minH: 18 } },
+      layout: { i: 'mod-tt-vid-engagement',     x: 0, y: 96,  w: 4, h: 24, minW: 1, minH: 24, maxH: 24 } },
     { id: 'mod-tt-vid-watch-metrics',  definitionId: 'tiktok-video-watch-metrics',  chartType: 'list',
-      layout: { i: 'mod-tt-vid-watch-metrics',  x: 0, y: 120, w: 4, h: 24, minW: 1, minH: 18 } },
+      layout: { i: 'mod-tt-vid-watch-metrics',  x: 0, y: 120, w: 4, h: 24, minW: 1, minH: 24, maxH: 24 } },
     { id: 'mod-tt-vid-sources',        definitionId: 'tiktok-video-sources',        chartType: 'list',
-      layout: { i: 'mod-tt-vid-sources',        x: 0, y: 144, w: 4, h: 24, minW: 1, minH: 18 } },
+      layout: { i: 'mod-tt-vid-sources',        x: 0, y: 144, w: 4, h: 24, minW: 1, minH: 24, maxH: 24 } },
 
     // Row 10 (y=168, h=18) — audience demographics pair (closes
     // the template).

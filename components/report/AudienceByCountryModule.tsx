@@ -117,9 +117,11 @@ export function AudienceByCountryModule({ profiles = [] }: AudienceByCountryModu
       </div>
 
       {/* Footer — Figma 1233:350747: footnote on the left, Module
-          Networks cluster on the right. Small top margin since the list
-          now stretches to fill the card. */}
-      <div className="flex items-center justify-between gap-4 mt-[8px]">
+          Networks cluster on the right.  `mt-[16px]` matches the
+          standard footer rhythm every other chart/carousel module
+          uses, giving the footnote breathing room from the list's
+          last row instead of crowding it. */}
+      <div className="flex items-center justify-between gap-4 mt-[16px]">
         <p
           className="text-[#79787B]"
           style={{

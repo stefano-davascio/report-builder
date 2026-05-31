@@ -1,29 +1,33 @@
 'use client';
 
 /**
- * Publishing Behaviour — Day × Hour bubble grid (Figma 1302:170169).
+ * Publishing Behaviour — Day × Value bubble grid (Figma 2238:52609).
  *
  * Different from `BubbleChartModule` in three meaningful ways:
  *
- *   • Axis orientation is flipped — days on X (Mon → Sun, left → right),
- *     hours on Y (1 AM at bottom → 1 AM "next day" at top). The Figma
- *     y-axis labels read 1 AM, 3 AM, 5 AM … 11 PM, 1 AM going up.
- *   • Bubble color encodes intensity via three bands — High / Mid / Low —
- *     instead of the single-color radius-only encoding used elsewhere.
- *     Thresholds split the value domain into equal thirds against the
- *     module's max value, so a single ramp shows up no matter how the
- *     data scales.
- *   • Legend swaps the empty-left / networks-right rhythm for a
- *     three-pill row (High / Mid / Low) on the left, networks on the
- *     right — matching the Figma comp.
+ *   • Axis orientation: days on X (Sun → Sat, left → right per the
+ *     redesign — the original 1302:170169 comp went Mon-first; the
+ *     2238 redesign moves Sunday to the left edge to match the way
+ *     reports list weekdays elsewhere).  Y is a numeric VALUE scale
+ *     (0 → 1k, ticks every 100) — was hour-of-day in the original
+ *     comp, swapped to a flat numeric scale in the redesign so each
+ *     bubble's vertical position encodes a magnitude (e.g. views,
+ *     engagement count) instead of a posting hour.
+ *   • Bubble COLOR encodes value bands — High / Mid / Low — using
+ *     the TikTok-blue 3-shade ramp (#005BBA / #0067D1 / #1A88FF,
+ *     per the Figma INFO tokens).
+ *   • Bubble SIZE scales CONTINUOUSLY with the value via Recharts'
+ *     ZAxis range, so bubble radius tracks magnitude alongside the
+ *     band color — bigger AND darker for higher-value posts.
  *
- * Everything else (axis chrome, grid color, tooltip card, network
- * indicator) shares the same primitives as `BubbleChartModule`,
- * `AudienceGrowthModule`, etc., so visual changes still propagate
- * through the shared modules.
+ * The `BubblePoint.hour` field is reinterpreted by this module as
+ * the generic numeric y-value (0-1000).  Sister module
+ * `FollowersOnlineModule` still uses `hour` as 0-23 hour-of-day,
+ * so the type stays shared but each consumer ascribes its own
+ * semantic to the field.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ScatterChart, Scatter, Cell, XAxis, YAxis, ZAxis,
   CartesianGrid, ReferenceLine, Tooltip, ResponsiveContainer,
@@ -38,55 +42,49 @@ import {
   COMPACT_NETWORKS_THRESHOLD_PX,
 } from './AudienceGrowthModule';
 
-// X-axis labels — Monday-first to match the Figma comp. (The rest of the
-// app uses Sunday-first lists in places like the Best-Performing-Day
-// table; the bubble grid follows the design here so the visual reads
-// like a calendar week.)
-const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+// X-axis labels — Sunday-first per the Figma 2238 redesign.  Raw
+// weekday (0=Sun…6=Sat in `BubblePoint`) maps directly to the
+// column index so `dayToColumn` is the identity.
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
-// Map raw weekday (0=Sun…6=Sat in `BubblePoint`) to the Mon-first column
-// index used for plotting.  Sunday wraps to the right edge.
 function dayToColumn(day: number): number {
-  return (day + 6) % 7;
+  return day;
 }
 
-// Y-axis tick ladder — every odd hour from 1 AM up through 11 PM, with
-// an extra "1 AM" tick at the very top representing the wrap into the
-// next day. Matches the Figma exactly.
-const HOUR_TICKS = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25];
+// Y-axis tick ladder — every 100 from 0 up through 1000.  Matches
+// Figma 2238:52640..52664 exactly.
+const VALUE_TICKS = [0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
+/** Logical top of the value scale — drives both the YAxis domain
+ *  ceiling and the High/Mid/Low band thresholds. */
+const VALUE_MAX = 1000;
 
-function formatHour(h: number): string {
-  // 25 = wrap to "next day" 1 AM; 24 = midnight (not a tick, but kept
-  // here for completeness if the formatter is asked).
-  if (h === 25) return '1 AM';
-  if (h === 24) return '12 AM';
-  if (h === 12) return '12 PM';
-  if (h < 12) return `${h} AM`;
-  return `${h - 12} PM`;
-}
-
-// `BubblePoint.hour` is 0-23; we plot in a 1-25 frame so the tick ladder
-// and the bubble positions line up. Hour 0 (midnight) renders at y=24,
-// just below the top "1 AM" wrap tick.
-function hourToPlot(hour: number): number {
-  return hour === 0 ? 24 : hour;
+function formatValue(v: number): string {
+  // Figma uses "1k" for the top tick and bare integers for the
+  // others (no thousands separator at this scale).
+  if (v >= 1000) return '1k';
+  return String(v);
 }
 
 // ── Color bands ────────────────────────────────────────────────────────────
-// Three discrete fills — top-third = High, middle-third = Mid,
-// bottom-third = Low. The ramp goes dark → light so visual weight tracks
-// posting intensity even at a glance.
-const HIGH_COLOR = '#0075DB';   // platform blue (matches other charts)
-const MID_COLOR  = '#5DCAE0';   // medium teal
-const LOW_COLOR  = '#BFE5EE';   // pale cyan
+// Three discrete fills mapped to the Figma 2238 INFO blue ramp.
+// Darkest = High (top third of the value range), lightest = Low
+// (bottom third).  Colors come from Figma variables:
+//   • INFO/info--shade_20 = #005BBA (High)
+//   • INFO/info--shade_10 = #0067D1 (Mid / "Medium")
+//   • INFO/info_dark-theme = #1A88FF (Low)
+const HIGH_COLOR = '#005BBA';
+const MID_COLOR  = '#0067D1';
+const LOW_COLOR  = '#1A88FF';
 
 type Band = 'high' | 'mid' | 'low';
 
-function bandFor(value: number, max: number): Band {
-  if (max <= 0) return 'low';
-  const t = value / max;
-  if (t >= 2 / 3) return 'high';
-  if (t >= 1 / 3) return 'mid';
+// Bands split the [0, VALUE_MAX] domain into equal thirds rather
+// than the data's own min/max — keeps the legend's color mapping
+// stable across data shapes (a deck with no high-value posts won't
+// promote its tallest mid bubble to "High").
+function bandFor(value: number): Band {
+  if (value >= (2 / 3) * VALUE_MAX) return 'high';
+  if (value >= (1 / 3) * VALUE_MAX) return 'mid';
   return 'low';
 }
 
@@ -96,20 +94,9 @@ function colorFor(band: Band): string {
   return LOW_COLOR;
 }
 
-// Bubble area (not radius) per band. Three discrete sizes — every
-// "High" bubble is the same circle, every "Mid" the same, every "Low"
-// the same — matching the Figma where size encodes band, not raw
-// value. Areas chosen so radii roughly track 14 px / 10 px / 6 px,
-// preserving the ~3× spread of the previous continuous ramp.
-const BAND_SIZE: Record<Band, number> = {
-  high: 600,
-  mid:  300,
-  low:  110,
-};
-
 const BAND_LABEL: Record<Band, string> = {
   high: 'High',
-  mid:  'Mid',
+  mid:  'Medium',
   low:  'Low',
 };
 
@@ -132,7 +119,7 @@ function PublishingTooltip({ active, payload }: {
   if (!p) return null;
   const dayLabel = DAY_LABELS[dayToColumn(p.day)];
   return (
-    <ModuleTooltipCard title={`${dayLabel} · ${formatHour(hourToPlot(p.hour))}`}>
+    <ModuleTooltipCard title={dayLabel}>
       <ModuleTooltipRow
         dot={colorFor(p.band)}
         name={BAND_LABEL[p.band]}
@@ -159,22 +146,26 @@ export function PublishingBehaviorModule({
 }: PublishingBehaviorModuleProps) {
   const chartH = Math.max(contentHeight - LEGEND_RESERVE, 200);
 
+  // Hovered bubble's pixel coordinates — used to anchor the
+  // Tooltip directly above-right of the cell instead of letting
+  // Recharts default to the chart's top-left (the
+  // ScatterChart with `cursor={false}` strips its active-
+  // coordinate fallback; see the matching pattern in
+  // `FollowersOnlineModule`).
+  const [hovered, setHovered] = useState<{ cx: number; cy: number } | null>(null);
+
   // Decorate every point with its plot coordinates + band classification
-  // up front so the render path stays a flat map. `maxValue` falls back
-  // to 1 to keep the band threshold math safe on an empty payload.
-  // `size` is the fixed bubble area for the point's band — Recharts'
-  // ZAxis reads this dataKey directly so bubbles within a band render
-  // at exactly the same radius.
+  // up front so the render path stays a flat map.  Both color band and
+  // y-axis position derive from `value` directly — see the file header
+  // comment for the BubblePoint field semantics for Publishing Behaviour.
   const decorated = useMemo(() => {
-    const max = data.reduce((m, p) => Math.max(m, p.value), 0) || 1;
     return data.map((p) => {
-      const band = bandFor(p.value, max);
+      const band = bandFor(p.value);
       return {
         ...p,
         column: dayToColumn(p.day),
-        yPlot:  hourToPlot(p.hour),
+        yPlot:  p.value,
         band,
-        size:   BAND_SIZE[band],
       };
     });
   }, [data]);
@@ -197,10 +188,10 @@ export function PublishingBehaviorModule({
                 draw extra lines at the actual axis edges and close
                 the box. */}
             <CartesianGrid stroke="#E8E8E9" strokeWidth={1} horizontal={false} vertical={false} />
-            {HOUR_TICKS.map((h) => (
+            {VALUE_TICKS.map((v) => (
               <ReferenceLine
-                key={`h-${h}`}
-                y={h}
+                key={`h-${v}`}
+                y={v}
                 stroke="#E8E8E9"
                 strokeWidth={1}
                 ifOverflow="visible"
@@ -234,18 +225,16 @@ export function PublishingBehaviorModule({
             <YAxis
               type="number"
               dataKey="yPlot"
-              // 0.5 / 25.5 keep the bottom (1 AM) and top (1 AM next
-              // day) ticks fully inside the plot area instead of being
-              // clipped against the axis edge.
-              domain={[0.5, 25.5]}
-              ticks={HOUR_TICKS}
-              tickFormatter={formatHour}
+              // Slight padding outside [0, 1000] so the 0 and 1k tick
+              // labels sit fully inside the plot area instead of
+              // clipping against the axis edges.
+              domain={[-25, VALUE_MAX + 25]}
+              ticks={VALUE_TICKS}
+              tickFormatter={formatValue}
               tickLine={false}
               axisLine={false}
-              // 48 px wide so "11 AM" / "11 PM" don't push against the
-              // grid — wider than the time-series modules (32 px) since
-              // the labels here are two characters + a space + meridian.
-              width={48}
+              // 32 px is plenty for "1k" / "900" / "100" labels.
+              width={32}
               tick={{
                 fontSize: 12,
                 fill: '#626165',
@@ -253,18 +242,44 @@ export function PublishingBehaviorModule({
               }}
               interval={0}
             />
-            {/* ZAxis reads the precomputed `size` field (one of three
-                fixed band areas) and passes it through identity:
-                domain == range, so a `size` of 600 renders as area
-                600 (r ≈ 13.8 px), 300 → r ≈ 9.8 px, 110 → r ≈ 5.9 px.
-                That gives discrete High / Mid / Low circle sizes
-                instead of a continuous value-driven ramp. */}
-            <ZAxis type="number" dataKey="size" domain={[110, 600]} range={[110, 600]} />
-            <Tooltip
-              cursor={{ stroke: '#C4C3C6', strokeDasharray: '3 3' }}
-              content={<PublishingTooltip />}
+            {/* ZAxis maps each bubble's `value` (its dataKey) linearly
+                to a bubble AREA in the 50 → 800 range — so a value=50
+                point renders as area ≈ 50 (r ≈ 4 px) and a value=1000
+                point as area ≈ 800 (r ≈ 16 px).  Recharts' default
+                scaling is by area (visual perception of size), not
+                radius, so the radius grows ~sqrt(value). */}
+            <ZAxis
+              type="number"
+              dataKey="value"
+              domain={[0, VALUE_MAX]}
+              range={[50, 800]}
             />
-            <Scatter data={decorated} isAnimationActive={false}>
+            <Tooltip
+              // No dashed crosshair — at scatter density, the
+              // cross cursor competes visually with the bubbles.
+              // Tooltip anchors to the hovered bubble's pixel
+              // coordinates via `position`; `wrapperStyle` keeps
+              // the tooltip hidden until `onMouseEnter` on a
+              // bubble sets `hovered`, otherwise Recharts shows
+              // a single-frame flash at (0, 0) on first hover
+              // before our state update lands.
+              cursor={false}
+              content={<PublishingTooltip />}
+              position={
+                hovered ? { x: hovered.cx + 12, y: hovered.cy - 12 } : { x: -9999, y: -9999 }
+              }
+              wrapperStyle={hovered ? undefined : { visibility: 'hidden' }}
+            />
+            <Scatter
+              data={decorated}
+              isAnimationActive={false}
+              onMouseEnter={(item) => {
+                if (typeof item.cx === 'number' && typeof item.cy === 'number') {
+                  setHovered({ cx: item.cx, cy: item.cy });
+                }
+              }}
+              onMouseLeave={() => setHovered(null)}
+            >
               {decorated.map((p, i) => {
                 const c = colorFor(p.band);
                 return <Cell key={i} fill={c} stroke={c} fillOpacity={0.95} />;
@@ -286,7 +301,7 @@ export function PublishingBehaviorModule({
           style={{ columnGap: 24, rowGap: 8 }}
         >
           <BandPill color={HIGH_COLOR} label="High" />
-          <BandPill color={MID_COLOR}  label="Mid" />
+          <BandPill color={MID_COLOR}  label="Medium" />
           <BandPill color={LOW_COLOR}  label="Low" />
         </div>
         <ModuleNetworks
