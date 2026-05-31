@@ -63,16 +63,20 @@ const SERIES_CROSS_NETWORK: SeriesSpec[] = [
   { key: 'profileViews', label: 'Profile views', color: '#ED6704', subtle: '#FCEDB9' },
 ];
 
-// TikTok palette (Figma 2201:51879) — single-hue blue gradient since
-// every series belongs to the same network.  Top band (Followers) is
-// the darkest, bottom band (Profile views) is the lightest, so the
-// stacked-area paint reads as a tonal staircase even when the bands
-// don't overlap perfectly.  Strokes are picked to be visible against
-// their own fill while still differentiating in the legend.
+// TikTok palette (Figma 2201:51879) — three INFO-blue shades, one
+// per series.  Strokes come straight from the Figma INFO tokens:
+//   • Net followers  — INFO/info--shade_20  (#005BBA, darkest)
+//   • Followers      — INFO/info--shade_10  (#0067D1, medium)
+//   • Profile views  — INFO/info_dark-theme (#1A88FF, lightest)
+// Subtle (area-fill) colors are pale tints of each stroke — picked
+// so the stacked areas read as a soft "blue gradient" stack matching
+// the Figma (palest at the top of the chart where only Net followers
+// is visible, slightly darker mid-chart where Followers overlays,
+// darkest at the very bottom where Profile views' thin strip sits).
 const SERIES_TIKTOK: SeriesSpec[] = [
-  { key: 'netFollowers', label: 'Net followers', color: '#1F8DDC', subtle: '#9EC6EA' },
-  { key: 'followers',    label: 'Followers',     color: '#0570DE', subtle: '#5B9BD5' },
-  { key: 'profileViews', label: 'Profile views', color: '#7CB5EB', subtle: '#CFE4F7' },
+  { key: 'netFollowers', label: 'Net followers', color: '#005BBA', subtle: '#C5DDF1' },
+  { key: 'followers',    label: 'Followers',     color: '#0067D1', subtle: '#9BC1E8' },
+  { key: 'profileViews', label: 'Profile views', color: '#1A88FF', subtle: '#7AB0F0' },
 ];
 
 /**
