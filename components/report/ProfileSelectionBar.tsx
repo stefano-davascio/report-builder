@@ -6,7 +6,6 @@ import { Tooltip as TooltipPrimitive } from '@base-ui/react/tooltip';
 import {
   IconClose,
   IconCalendar,
-  IconChevronDown,
   IconPlusCircle,
   IconWarning,
   IconDanger,
@@ -1016,7 +1015,6 @@ function DateRangeTrigger() {
         >
           {triggerLabel}
         </span>
-        <IconChevronDown size={16} color="#4C4B4F" />
       </button>
       {open && (
         <DateRangeDropdown
