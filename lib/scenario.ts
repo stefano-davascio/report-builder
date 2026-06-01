@@ -91,7 +91,9 @@ export interface Scenario {
    *  preview the new IA. */
   sidebarMode: SidebarMode;
   /** Report-builder canvas treatment — white card vs grey background.
-   *  See `CanvasMode` for details.  Defaults to 'white'. */
+   *  See `CanvasMode` for details.  Defaults to 'grey' — modules
+   *  sit directly on the page-grey backdrop and the white-card
+   *  wrapper is opt-in via the scenario switcher. */
   canvasMode: CanvasMode;
   /** Chart curve interpolation — see `ChartCurveStyle` for details. */
   chartCurveStyle: ChartCurveStyle;
@@ -114,7 +116,7 @@ const DEFAULT_SCENARIO: Scenario = {
     sorting: false,
   },
   sidebarMode: 'combined',
-  canvasMode: 'white',
+  canvasMode: 'grey',
   chartCurveStyle: 'linear',
   showErrorStates: false,
 };

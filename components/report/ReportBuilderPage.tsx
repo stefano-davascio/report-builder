@@ -243,7 +243,9 @@ interface ReportBuilderPageProps {
    *  Switcher.  `'white'` keeps the existing white-card chrome;
    *  `'grey'` strips the card + its 24 px inset so modules sit
    *  directly on the page's `#F3F3F4` background.  Defaults to
-   *  `'white'` for production parity. */
+   *  `'grey'` — matches the new default scenario state, where the
+   *  modules sit on the page-grey backdrop and the white-card
+   *  treatment is opt-in via the scenario switcher. */
   canvasMode?: CanvasMode;
   /** Chart curve interpolation — drives every time-series Area /
    *  Line in the builder via `<ChartStyleProvider>` + the
@@ -265,7 +267,7 @@ export function ReportBuilderPage({
   onBack,
   onSave: onSaveProp,
   sidebarMode = 'combined',
-  canvasMode = 'white',
+  canvasMode = 'grey',
   chartCurveStyle = 'linear',
   showErrorStates = false,
 }: ReportBuilderPageProps = {}) {
