@@ -5,8 +5,8 @@ import { createPortal } from 'react-dom';
 import { ChartType } from '@/types';
 import { cn } from '@/lib/utils';
 import {
+  IconActivity,
   IconBarChart,
-  IconLineChart,
   IconAreaChart,
   IconPieChart,
   IconBubbleChart,
@@ -23,9 +23,18 @@ import {
 // Action-row icons render at 16×16 inside the 32×32 button tile
 // (p-[8px] on each side). Dropdown rows still use the 20×20 variant;
 // callers pass `20` explicitly for those.
+//
+// `line` uses `IconActivity` (heartbeat / pulse zigzag, Figma
+// 2042:42209 — the bare wavy-line glyph) rather than `IconLineChart`
+// (ChartLineUp — wavy line nested inside an L-axis frame, used by
+// module headers and the visual-type chip row).  The hover toolbar
+// wants the SIMPLER glyph so all three chart-type segments
+// (line / area / bar) read at the same visual weight; the axis
+// frame on `IconLineChart` makes it heavier than its siblings at
+// this 16-px tile size.
 function chartIcon(type: ChartType, size = 16): ReactNode {
   switch (type) {
-    case 'line':   return <IconLineChart size={size} />;
+    case 'line':   return <IconActivity size={size} />;
     case 'area':   return <IconAreaChart size={size} />;
     case 'bar':    return <IconBarChart size={size} />;
     case 'pie':    return <IconPieChart size={size} />;
@@ -88,24 +97,84 @@ const COMPACT_THRESHOLD_PX = 360;
 const DROPDOWN_SHADOW =
   '0px 0px 0px 1px rgba(32,30,36,0.1), 0px 12px 8px -4px rgba(32,30,36,0.15), 0px 4px 4px -2px rgba(32,30,36,0.2)';
 
+// Figma 2042:42209 — Elevation 1 (surface/shadow/elevation-12 / 14 / 20)
+// applied to BOTH hover-toolbar pills (chart-type group + actions
+// group).  The pills used to render flat; the updated design lifts
+// them off the card with a subtle 3-stack shadow so the toolbar
+// reads as floating chrome rather than a baked-in header.
+const TOOLBAR_PILL_SHADOW =
+  '0px 1px 3px 0px rgba(27,27,32,0.12), 0px 1px 1px 0px rgba(27,27,32,0.14), 0px 2px 1px -1px rgba(27,27,32,0.2)';
+
+// Figma 2042:42209 — pill chrome shared by both the chart-type
+// group and the duplicate/delete group.  Centralizing it here keeps
+// the two groups (and the compact-mode single pills below) visually
+// in lockstep when this spec evolves.
+//
+//   • `p-[2px]` — 2 px inset around the inner buttons.  Previously
+//     buttons sat flush against the pill border (with the outer
+//     `overflow-hidden` clipping the corners); the design now
+//     insets them so each button reads as its own tap target.
+//   • `gap-[2px]` — 2 px breathing room between sibling buttons,
+//     replacing the old 1 px vertical divider in the duplicate/
+//     delete group.  Inset + gap together is the new way the
+//     design separates the buttons.
+//   • `shadow` — Elevation 1 (see above).
+const PILL_CLASSES =
+  'flex items-center gap-[2px] p-[2px] bg-white border border-[#E8E8E9] rounded-[6px]';
+
+// Inner button chrome — used by every icon button inside a pill.
+// 28×28 footprint stays the same as before (16-px icon + 6-px
+// halo from p-[6px]).  What's new:
+//   • `rounded-[4px]` — each button now rounds itself instead of
+//     relying on the outer pill's `overflow-hidden`.  The pill no
+//     longer clips, so the active-state background fully shows its
+//     own 4-px corners (4 px inner radius nested inside the pill's
+//     6 px outer radius — a clean 2-px ring of pill-bg around it).
+//   • Hover bg: `rgba(32,30,36,0.05)` (DARK/dark--alpha_05) — the
+//     Figma updated the hover token from the page-grey `#F3F3F4`
+//     used elsewhere to this near-black-at-5 % wash so the hover
+//     reads as subtle ink on the white pill instead of swapping
+//     the bg to the grey of the canvas behind it.
+const TOOLBAR_BTN_BASE =
+  'flex items-center justify-center w-7 h-7 p-[6px] rounded-[4px] transition-colors [&_path]:[stroke-width:1.25]';
+const TOOLBAR_BTN_HOVER = 'hover:bg-[rgba(32,30,36,0.05)]';
+
 /**
  * Dumb renderer — visibility is controlled by the parent ModuleCard
  * (hover-gated). Switches between NORMAL and COMPACT based on the
  * observed card width passed in from the parent.
  */
 export function ModuleActions(props: ModuleActionsProps) {
-  // During the first paint `cardWidth` may be 0 (ResizeObserver hasn't
-  // fired yet). Fall back to NORMAL so the full-size layout shows
-  // first; the compact switch only kicks in once we actually measure a
-  // sub-threshold width.
-  const compact = props.cardWidth > 0 && props.cardWidth < COMPACT_THRESHOLD_PX;
+  // The COMPACT layout exists because the chart-type pill + the
+  // duplicate/delete pill together don't fit alongside the title on
+  // narrow cards.  When the chart-type pill isn't rendered to begin
+  // with (single supported chart type — e.g. metric cards), there's
+  // no horizontal pressure: the duplicate/delete pill alone always
+  // fits even on the narrowest cards, so we skip compact mode and
+  // surface duplicate/delete inline.  Without this carve-out, metric
+  // cards would hide both actions behind a kebab — a worse default
+  // because the user has to click the kebab to discover what's
+  // actually a 2-button toolbar.
+  //
+  // During the first paint `cardWidth` may be 0 (ResizeObserver
+  // hasn't fired yet).  Fall back to NORMAL so the full-size layout
+  // shows first; the compact switch only kicks in once we actually
+  // measure a sub-threshold width AND the card has multiple chart
+  // types to pick from.
+  const canSwitch = props.supportedChartTypes.length > 1;
+  const compact =
+    canSwitch && props.cardWidth > 0 && props.cardWidth < COMPACT_THRESHOLD_PX;
   return compact ? <CompactActions {...props} /> : <NormalActions {...props} />;
 }
 
 // ── NORMAL layout ──────────────────────────────────────────────────────────
-// Figma 1232:311142 — two rounded-6 bordered groups separated by an 8 px
-// gap. Chart group: 3 × 32-wide segments with 20 px icons at p-6 inside.
-// Duplicate/Delete group: 32 + 1 px divider + 32, same 20 px icon spec.
+// Figma 2042:42209 — two rounded-6 bordered pill groups, each with
+// `p-[2px]` inset and `gap-[2px]` between inner buttons, separated
+// by an 8 px gap.  Both pills carry Elevation 1 so they read as
+// floating chrome above the card.  Chart group: N × 28×28 segments
+// (16-px icon + 6-px halo).  Duplicate/Delete group: 28×28 +
+// 2-px-gap + 28×28 — the 1 px divider used to sit between them; the
+// new design replaces it with the pill's own inset+gap.
 function NormalActions({
   supportedChartTypes,
   currentChartType,
@@ -117,7 +186,7 @@ function NormalActions({
   return (
     <div className="flex items-center gap-2 flex-shrink-0">
       {canSwitch && (
-        <div className="flex items-center bg-white border border-[#E8E8E9] rounded-[6px] overflow-hidden">
+        <div className={PILL_CLASSES} style={{ boxShadow: TOOLBAR_PILL_SHADOW }}>
           {supportedChartTypes.map((type) => {
             const active = type === currentChartType;
             return (
@@ -128,15 +197,16 @@ function NormalActions({
                 onMouseDown={(e) => e.stopPropagation()}
                 title={CHART_TYPE_LABELS[type]}
                 className={cn(
-                  // 28×28 segments wrapping a 16-px icon (p-[6px]
-                  // gives a 6-px halo around the glyph). Stroke 1.25
-                  // + #363439 fill match the native Figma asset (the
-                  // library default 1.5 reads too heavy at this size).
-                  'flex items-center justify-center w-7 h-7 p-[6px] transition-colors',
-                  '[&_path]:[stroke-width:1.25]',
+                  TOOLBAR_BTN_BASE,
+                  // Active wash is `PRIMARY/primary--tint_90`
+                  // (#EDEAFF, Figma 2010:42707).  Icon adopts
+                  // BRAND/primary (#4D36FF) so the active segment
+                  // reads as a purple tint even when the glyph is
+                  // small.  Non-active segments take the dark text
+                  // token and pick up the hover wash on pointerover.
                   active
                     ? 'bg-[#EDEAFF] text-[#4D36FF]'
-                    : 'bg-white text-[#363439] hover:bg-[#F3F3F4]',
+                    : cn('bg-white text-[#363439]', TOOLBAR_BTN_HOVER),
                 )}
               >
                 {chartIcon(type, 16)}
@@ -145,31 +215,22 @@ function NormalActions({
           })}
         </div>
       )}
-      <div className="flex items-center bg-white border border-[#E8E8E9] rounded-[6px] overflow-hidden">
+      <div className={PILL_CLASSES} style={{ boxShadow: TOOLBAR_PILL_SHADOW }}>
         <button
           type="button"
           onClick={onDuplicate}
           onMouseDown={(e) => e.stopPropagation()}
           title="Duplicate module"
-          className={cn(
-            'flex items-center justify-center w-7 h-7 p-[6px]',
-            'bg-white text-[#363439] hover:bg-[#F3F3F4] transition-colors',
-            '[&_path]:[stroke-width:1.25]',
-          )}
+          className={cn(TOOLBAR_BTN_BASE, 'bg-white text-[#363439]', TOOLBAR_BTN_HOVER)}
         >
           <IconCopy size={16} />
         </button>
-        <div className="w-px h-7 bg-[#E8E8E9]" aria-hidden="true" />
         <button
           type="button"
           onClick={onDelete}
           onMouseDown={(e) => e.stopPropagation()}
           title="Delete module"
-          className={cn(
-            'flex items-center justify-center w-7 h-7 p-[6px]',
-            'bg-white text-[#363439] hover:bg-[#F3F3F4] transition-colors',
-            '[&_path]:[stroke-width:1.25]',
-          )}
+          className={cn(TOOLBAR_BTN_BASE, 'bg-white text-[#363439]', TOOLBAR_BTN_HOVER)}
         >
           <IconTrash size={16} />
         </button>
@@ -245,10 +306,19 @@ function CompactActions({
             }}
             onMouseDown={(e) => e.stopPropagation()}
             title={CHART_TYPE_LABELS[currentChartType]}
+            // Compact-mode pills carry the same Elevation 1 shadow
+            // and DARK/dark--alpha_05 hover wash as the
+            // normal-mode pills (Figma 2042:42209) so the toolbar
+            // chrome reads consistently across the breakpoint.
+            // Open-state bg also moves to the alpha-05 wash —
+            // matches the wider-card "pressed pill" treatment.
             className={cn(
               'flex items-center gap-2 p-[6px] h-7 border border-[#E8E8E9] rounded-[6px] transition-colors',
-              chartOpen ? 'bg-[#F3F3F4]' : 'bg-white hover:bg-[#F3F3F4]',
+              chartOpen
+                ? 'bg-[rgba(32,30,36,0.05)]'
+                : 'bg-white hover:bg-[rgba(32,30,36,0.05)]',
             )}
+            style={{ boxShadow: TOOLBAR_PILL_SHADOW }}
           >
             <span className="flex items-center justify-center text-[#4D36FF]">
               {chartIcon(currentChartType, 16)}
@@ -278,10 +348,15 @@ function CompactActions({
           }}
           onMouseDown={(e) => e.stopPropagation()}
           title="More actions"
+          // Matches the chart-trigger pill above — same elevation,
+          // same alpha-05 hover / open wash.
           className={cn(
             'flex items-center justify-center w-7 h-7 p-[6px] border border-[#E8E8E9] rounded-[6px] transition-colors',
-            overflowOpen ? 'bg-[#F3F3F4]' : 'bg-white hover:bg-[#F3F3F4]',
+            overflowOpen
+              ? 'bg-[rgba(32,30,36,0.05)]'
+              : 'bg-white hover:bg-[rgba(32,30,36,0.05)]',
           )}
+          style={{ boxShadow: TOOLBAR_PILL_SHADOW }}
         >
           <IconMoreVertical size={16} color="#4C4B4F" />
         </button>
