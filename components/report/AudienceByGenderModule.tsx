@@ -62,10 +62,22 @@ const GENDER_COLORS_TIKTOK = {
  * `'tiktok'` swaps to the all-blue INFO ramp; anything else falls
  * back to the cross-network green / blue / orange tokens.  Mirrors
  * the `getSeries(network)` pattern used by `AudienceGrowthModule`.
+ *
+ * Exported so the sibling `AudienceByGenderBarModule` can use the
+ * same palette resolver — both modules share the same legend row
+ * shape (`Name - 54%`) and need to agree on slice colors.
  */
-function getGenderColors(network?: string | null) {
+export function getGenderColors(network?: string | null) {
   return network === 'tiktok' ? GENDER_COLORS_TIKTOK : GENDER_COLORS_CROSS_NETWORK;
 }
+
+/** Fixed gender breakdown shared by both the donut and bar
+ *  variants.  Values are percentages summing to 100. */
+export const GENDER_BREAKDOWN: Array<{ key: 'female' | 'male' | 'unspecified'; name: string; value: number }> = [
+  { key: 'female',      name: 'Female',      value: 54 },
+  { key: 'male',        name: 'Male',        value: 45 },
+  { key: 'unspecified', name: 'Unspecified', value: 1  },
+];
 
 interface AudienceByGenderModuleProps {
   profiles?: MockProfile[];
@@ -135,6 +147,11 @@ export function AudienceByGenderModule({
                 className="block h-[12px] w-[12px] rounded-full"
                 style={{ background: entry.fill }}
               />
+              {/* `Name - 54%` per Figma 2467:42121 — value sits in
+                  the same label so the legend doubles as the
+                  per-slice breakdown.  Was just the name before;
+                  the design now puts the figures here instead of
+                  in a separate row beneath the donut. */}
               <span
                 className="text-[#4C4B4F]"
                 style={{
@@ -144,7 +161,7 @@ export function AudienceByGenderModule({
                   letterSpacing: '0.3px',
                 }}
               >
-                {entry.name}
+                {entry.name} - {entry.value}%
               </span>
             </div>
           ))}

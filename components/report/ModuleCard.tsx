@@ -20,6 +20,7 @@ import { CategoricalBarModule, TimeSeriesBarModule } from './BarChartModule';
 import { AudienceGrowthLineModule, TimeSeriesLineModule } from './LineChartModule';
 import { TimeSeriesAreaModule } from './AreaChartModule';
 import { AudienceByGenderModule } from './AudienceByGenderModule';
+import { AudienceByGenderBarModule } from './AudienceByGenderBarModule';
 import { AudienceByCountryModule } from './AudienceByCountryModule';
 import { AudienceByCountryBarModule } from './AudienceByCountryBarModule';
 import { AudienceByCountryPieModule } from './AudienceByCountryPieModule';
@@ -370,6 +371,22 @@ function getModuleContent(
   // Audience Growth's bar mode is already handled above by
   // AudienceGrowthBarModule (3-series stacked) and takes precedence.
   if (chartType === 'bar') {
+    // Audience by gender bar variant has its own dedicated
+    // module (Figma 2467:42088 with chart-type toggled) so the
+    // network-aware blue palette and `Name - 54%` legend match
+    // the donut variant.  Other categorical-bar consumers
+    // (instagram-audience, tiktok-audience) keep going through
+    // the generic `CategoricalBarModule`.
+    if (definitionId === 'audience-by-gender') {
+      return (
+        <AudienceByGenderBarModule
+          contentHeight={contentHeight}
+          contentWidth={contentWidth}
+          profiles={profilesForModule}
+          network={module.network}
+        />
+      );
+    }
     const pieData = (MOCK_PIE_DATA as Record<string, typeof MOCK_PIE_DATA['audience-demographics']>)[definitionId];
     if (pieData) {
       return (
