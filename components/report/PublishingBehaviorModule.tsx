@@ -146,13 +146,23 @@ export function PublishingBehaviorModule({
 }: PublishingBehaviorModuleProps) {
   const chartH = Math.max(contentHeight - LEGEND_RESERVE, 200);
 
-  // Hovered bubble's pixel coordinates — used to anchor the
-  // Tooltip directly above-right of the cell instead of letting
-  // Recharts default to the chart's top-left (the
-  // ScatterChart with `cursor={false}` strips its active-
-  // coordinate fallback; see the matching pattern in
-  // `FollowersOnlineModule`).
-  const [hovered, setHovered] = useState<{ cx: number; cy: number } | null>(null);
+  // Hovered bubble's pixel coordinates + the chart's width at the
+  // time of hover — used to anchor the Tooltip directly to the
+  // bubble (instead of letting Recharts default to the chart's
+  // top-left).  The chart width drives a right-edge flip so the
+  // tooltip doesn't extend past the module card's right edge,
+  // where the card's `overflow: hidden` would clip it (see the
+  // matching pattern in `FollowersOnlineModule`).
+  const [hovered, setHovered] = useState<{
+    cx: number;
+    cy: number;
+    chartW: number;
+  } | null>(null);
+  // Rough max width of the tooltip card.  Used to predict if a
+  // right-of-bubble anchor would overflow the chart area.  Set a
+  // bit wider than the longest content ("Sat" + "Medium" + 4-digit
+  // value = ~110 px) so the flip kicks in before truncation.
+  const TOOLTIP_EST_WIDTH = 120;
 
   // Decorate every point with its plot coordinates + band classification
   // up front so the render path stays a flat map.  Both color band and
@@ -262,21 +272,41 @@ export function PublishingBehaviorModule({
               // the tooltip hidden until `onMouseEnter` on a
               // bubble sets `hovered`, otherwise Recharts shows
               // a single-frame flash at (0, 0) on first hover
-              // before our state update lands.
+              // before our state update lands.  The x-position
+              // flips LEFT of the bubble when a right-of-bubble
+              // anchor would push the tooltip past the chart's
+              // right edge — otherwise the module card's
+              // `overflow: hidden` clips the rightmost columns'
+              // tooltips.
               cursor={false}
               content={<PublishingTooltip />}
               position={
-                hovered ? { x: hovered.cx + 12, y: hovered.cy - 12 } : { x: -9999, y: -9999 }
+                hovered
+                  ? {
+                      x:
+                        hovered.cx + 12 + TOOLTIP_EST_WIDTH > hovered.chartW
+                          ? Math.max(0, hovered.cx - 12 - TOOLTIP_EST_WIDTH)
+                          : hovered.cx + 12,
+                      y: hovered.cy - 12,
+                    }
+                  : { x: -9999, y: -9999 }
               }
               wrapperStyle={hovered ? undefined : { visibility: 'hidden' }}
             />
             <Scatter
               data={decorated}
               isAnimationActive={false}
-              onMouseEnter={(item) => {
-                if (typeof item.cx === 'number' && typeof item.cy === 'number') {
-                  setHovered({ cx: item.cx, cy: item.cy });
-                }
+              onMouseEnter={(item, _i, e) => {
+                if (typeof item.cx !== 'number' || typeof item.cy !== 'number') return;
+                // Walk up from the bubble to the chart's outer
+                // SVG to get its width; we use that to decide
+                // whether to flip the tooltip's x anchor.
+                const target = e?.target as SVGElement | null;
+                const svg = target?.ownerSVGElement ?? target?.closest?.('svg');
+                const chartW = svg
+                  ? (svg as SVGSVGElement).getBoundingClientRect().width
+                  : 0;
+                setHovered({ cx: item.cx, cy: item.cy, chartW });
               }}
               onMouseLeave={() => setHovered(null)}
             >

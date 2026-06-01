@@ -36,28 +36,55 @@ import { MockProfile } from '@/lib/profile-data';
 import { ModuleNetworks } from './ModuleNetworks';
 import { ModuleTooltip } from './ModuleTooltip';
 
-// Green / blue / orange — shared with Audience Growth (`SERIES`
-// in `AudienceGrowthModule.tsx`). Re-stating the literals here rather
-// than importing keeps the dependency graph one-directional (chart
-// modules don't reach into each other for tokens) and makes the
-// palette auditable from this file alone.
-const GENDER_COLORS = {
+// Cross-network palette — green / blue / orange, shared with the
+// `SERIES_CROSS_NETWORK` ramp in `AudienceGrowthModule.tsx`.
+const GENDER_COLORS_CROSS_NETWORK = {
   female: '#3FA40D',      // green — biggest slice
   male: '#0570DE',        // blue  — Male stays blue
   unspecified: '#ED6704', // orange — warm accent for the residual slice
 } as const;
 
-const GENDER_DATA = [
-  { key: 'female', name: 'Female', value: 54, fill: GENDER_COLORS.female },
-  { key: 'male', name: 'Male', value: 45, fill: GENDER_COLORS.male },
-  { key: 'unspecified', name: 'Unspecified', value: 1, fill: GENDER_COLORS.unspecified },
-];
+// TikTok palette (Figma 2467:42088) — three INFO-blue shades from
+// the same Figma INFO tokens Audience Growth uses on TikTok.
+// Female (the dominant slice) gets the DARKEST shade per the
+// design — visual weight tracks data weight:
+//   • Female      — INFO/info--shade_20  (#005BBA, darkest)
+//   • Male        — INFO/info--shade_10  (#0067D1, medium)
+//   • Unspecified — INFO/info_dark-theme (#1A88FF, lightest)
+const GENDER_COLORS_TIKTOK = {
+  female: '#005BBA',
+  male: '#0067D1',
+  unspecified: '#1A88FF',
+} as const;
+
+/**
+ * Resolve the gender-slice palette for a given module network.
+ * `'tiktok'` swaps to the all-blue INFO ramp; anything else falls
+ * back to the cross-network green / blue / orange tokens.  Mirrors
+ * the `getSeries(network)` pattern used by `AudienceGrowthModule`.
+ */
+function getGenderColors(network?: string | null) {
+  return network === 'tiktok' ? GENDER_COLORS_TIKTOK : GENDER_COLORS_CROSS_NETWORK;
+}
 
 interface AudienceByGenderModuleProps {
   profiles?: MockProfile[];
+  /** Network binding from the parent `ReportModule.network`.  When
+   *  `'tiktok'` the slices use the INFO-blue ramp matching the rest
+   *  of the TikTok report; otherwise the cross-network palette. */
+  network?: string | null;
 }
 
-export function AudienceByGenderModule({ profiles = [] }: AudienceByGenderModuleProps) {
+export function AudienceByGenderModule({
+  profiles = [],
+  network,
+}: AudienceByGenderModuleProps) {
+  const colors = getGenderColors(network);
+  const GENDER_DATA = [
+    { key: 'female',      name: 'Female',      value: 54, fill: colors.female },
+    { key: 'male',        name: 'Male',        value: 45, fill: colors.male },
+    { key: 'unspecified', name: 'Unspecified', value: 1,  fill: colors.unspecified },
+  ];
   return (
     <div className="flex h-full w-full flex-col gap-[16px]">
       {/* Donut — capped at 330 px so it matches `AudienceByCountryPieModule`'s

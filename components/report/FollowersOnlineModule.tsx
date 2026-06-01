@@ -217,7 +217,16 @@ export function FollowersOnlineModule({
     hour: number;
     cx: number;
     cy: number;
+    /** Chart's pixel width at the time of hover — drives the
+     *  right-edge flip below so the tooltip doesn't get clipped
+     *  by the module card's `overflow: hidden` when hovering a
+     *  bubble in the rightmost (11 PM) column. */
+    chartW: number;
   } | null>(null);
+  /** Rough max width of the Followers-online tooltip — "Sat · 11 PM"
+   *  + a 16k value at 12 px = ~120 px including padding.  Used to
+   *  predict if a right-of-bubble anchor would overflow. */
+  const TOOLTIP_EST_WIDTH = 130;
 
   // Decorate every point with row coordinate + a normalized intensity
   // `t` in [0,1] used both for the cell fill and the tooltip swatch.
@@ -343,7 +352,22 @@ export function FollowersOnlineModule({
               // slightly up-right so the tooltip nose doesn't
               // overlap the bubble itself.
               position={
-                hovered ? { x: hovered.cx + 12, y: hovered.cy - 12 } : undefined
+                hovered
+                  ? {
+                      // Right-edge flip: when a right-of-bubble
+                      // anchor would push past the chart's right
+                      // edge, position the tooltip to the LEFT of
+                      // the bubble instead.  Otherwise the module
+                      // card's `overflow: hidden` clips the
+                      // tooltip when hovering bubbles in the
+                      // rightmost (11 PM) column.
+                      x:
+                        hovered.cx + 12 + TOOLTIP_EST_WIDTH > hovered.chartW
+                          ? Math.max(0, hovered.cx - 12 - TOOLTIP_EST_WIDTH)
+                          : hovered.cx + 12,
+                      y: hovered.cy - 12,
+                    }
+                  : undefined
               }
             />
             {/* Mouse hover on individual `<Scatter>` points fires
@@ -354,14 +378,17 @@ export function FollowersOnlineModule({
             <Scatter
               data={decorated}
               isAnimationActive={false}
-              onMouseEnter={(item) => {
+              onMouseEnter={(item, _i, e) => {
                 // Recharts' Scatter passes a `ScatterPointItem`
                 // whose `.payload` is the raw data row we fed in
                 // (the `decorated` entry) and whose `.cx` / `.cy`
                 // are the bubble's pixel coordinates inside the
                 // chart.  We pull both: payload drives the
                 // crosshair (`day` + `hour`), coordinates drive
-                // the tooltip's anchored position.
+                // the tooltip's anchored position.  We also walk
+                // up to the parent SVG to read the chart width,
+                // which the tooltip-position calc uses for the
+                // right-edge flip.
                 const p = item.payload as { day?: number; hour?: number } | undefined;
                 if (
                   p &&
@@ -370,7 +397,12 @@ export function FollowersOnlineModule({
                   typeof item.cx === 'number' &&
                   typeof item.cy === 'number'
                 ) {
-                  setHovered({ day: p.day, hour: p.hour, cx: item.cx, cy: item.cy });
+                  const target = e?.target as SVGElement | null;
+                  const svg = target?.ownerSVGElement ?? target?.closest?.('svg');
+                  const chartW = svg
+                    ? (svg as SVGSVGElement).getBoundingClientRect().width
+                    : 0;
+                  setHovered({ day: p.day, hour: p.hour, cx: item.cx, cy: item.cy, chartW });
                 }
               }}
               onMouseLeave={() => setHovered(null)}

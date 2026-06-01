@@ -196,6 +196,12 @@ function presetTikTokOnly(): ReportModule[] {
     // Row 10 (y=168, h=18) — audience demographics pair (closes
     // the template).
     { id: 'mod-tt-aud-gender',         definitionId: 'audience-by-gender',          chartType: 'pie',
+      // `network: 'tiktok'` swaps the donut slice palette from
+      // the cross-network green / blue / orange ramp to the
+      // INFO-blue ramp matching the rest of the TikTok report
+      // (Figma 2467:42088).  See `getGenderColors` in
+      // `AudienceByGenderModule.tsx`.
+      network: 'tiktok',
       layout: { i: 'mod-tt-aud-gender',         x: 0, y: 168, w: 2, h: 18, minW: 1, minH: 12 } },
     { id: 'mod-tt-aud-country',        definitionId: 'audience-by-country',         chartType: 'list',
       layout: { i: 'mod-tt-aud-country',        x: 2, y: 168, w: 2, h: 18, minW: 1, minH: 12 } },

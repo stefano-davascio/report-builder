@@ -139,7 +139,7 @@ function getModuleContent(
   // default PieChartRenderer when the chart type is still `pie`; if the
   // user switches the module to bar, we fall through to ChartRenderer.
   if (definitionId === 'audience-by-gender' && chartType === 'pie') {
-    return <AudienceByGenderModule profiles={profilesForModule} />;
+    return <AudienceByGenderModule profiles={profilesForModule} network={module.network} />;
   }
 
   // Audience by country — three bespoke renderers, one per chart type:
