@@ -816,13 +816,22 @@ export function ReportBuilderPage({
             24 px ← gutter  | 52 px sidebar | 8 px gap |
             375 px panel    | 8 px gap      | 1237 px canvas | 24 px gutter →
           Vertical: 8 px top margin (below 52 px profile bar), 8 px bottom.
-          We carry all the gutters/gaps on the flex parent via `gap-2 px-6
-          py-2`, so every child only needs to declare its own width and
-          whether it vertically stretches.
+          We carry the left gutter / inter-child gaps on the flex parent
+          via `gap-2 pl-6 py-2`, so every child only needs to declare its
+          own width and whether it vertically stretches.
+
+          NB: we set `pl-6` (left padding only) NOT `px-6` here.  The
+          canvas (last child) needs to extend all the way to the viewport
+          right edge so its 24 px scrollbar gutter (`pr-[24px]` inside)
+          can sit there.  Putting the right gutter on the parent instead
+          would push the canvas — and the scrollbar with it — 24 px in,
+          and the modules' own right edge would land 48 px from the
+          viewport, no longer aligning with the header (the header's
+          right edge sits at `viewport - 24`).
           Order matters: sidebar FIRST, then panel, then canvas — the panel
           is not flush against the viewport edge, it floats between the
           sidebar and the canvas. */}
-      <div className="flex flex-1 min-h-0 gap-2 px-6 py-2 bg-[#F3F3F4]">
+      <div className="flex flex-1 min-h-0 gap-2 pl-6 py-2 bg-[#F3F3F4]">
         {/* Left sidebar (self-start so it doesn't stretch to panel/canvas
             height). */}
         <LeftSidebar
@@ -917,16 +926,42 @@ export function ReportBuilderPage({
             removing the chrome only changes what's painted behind. */}
         <div
           className={cn(
-            // `scrollbar-gutter: stable` reserves space for the
-            // vertical scrollbar so it sits in its own gutter on
-            // the right edge instead of overlaying modules.  On
-            // macOS the default scrollbar is an overlay that
-            // floats on top of content and visually clips the
-            // right-edge of the rightmost modules; reserving the
-            // gutter keeps every module fully visible regardless
-            // of whether the scrollbar is shown.
-            'flex-1 min-w-0 overflow-y-auto [scrollbar-gutter:stable]',
-            canvasMode === 'white' && 'bg-white border border-[#E8E8E9] rounded-[8px]',
+            'flex-1 min-w-0 overflow-y-auto canvas-scrollbar',
+            // 24 px right gutter total between modules' right edge
+            // and viewport, split into:
+            //   • 16 px scrollbar lane (`pr-[16px]` inside the
+            //     scroll container) — the strip the scrollbar
+            //     floats over without touching the modules.
+            //   •  8 px outer margin (`mr-2` on the scroll
+            //     container) — keeps the scrollbar from hugging
+            //     the viewport edge.  Without this, the thumb
+            //     ends 4 px from the viewport (just its own
+            //     transparent border), which reads as cramped.
+            //
+            //  • GREY mode — `mr-2 pr-[16px]`.  Modules end at
+            //    `viewport - 8 - 16 = viewport - 24`, aligning
+            //    with the header date button.  Scrollbar floats at
+            //    `viewport - 8`, giving it breathing room from the
+            //    right edge.
+            //
+            //  • WHITE mode — `mr-6` (24 px) keeps the white
+            //    card's right edge inset by 24 px, recreating the
+            //    parent's missing `pr-6`.  The card's own inner
+            //    `p-6` provides the scrollbar lane INSIDE the
+            //    card, so no additional `pr` is needed here.
+            //
+            // Why not `scrollbar-gutter: stable`?  On macOS,
+            // Chrome's overlay scrollbars take 0 px of layout
+            // width, so `gutter: stable` reserves 0 px — defeating
+            // the purpose.  Explicit padding + margin is the only
+            // reliable cross-platform option.  The
+            // `canvas-scrollbar` class (`app/globals.css`) styles
+            // the WebKit pseudo-element so classic scrollbars
+            // (Windows / macOS "Always show scrollbars"
+            // preference) match the brand-grey design.
+            canvasMode === 'white'
+              ? 'bg-white border border-[#E8E8E9] rounded-[8px] mr-6'
+              : 'mr-2 pr-[16px]',
           )}
         >
           {/* `relative` here so the empty-board overlay can pin to

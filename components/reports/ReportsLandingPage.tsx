@@ -86,7 +86,17 @@ export function ReportsLandingPage({
       // exceeds the viewport. `position: sticky` on descendants
       // (TopAppBar wrapper, the Reports header chrome) takes effect
       // relative to THIS scroll container.
-      className="h-full overflow-y-auto bg-white"
+      // `canvas-scrollbar` (defined in `app/globals.css`) forces a
+      // visible classic scrollbar in a reserved right-edge gutter
+      // so the bar doesn't float on top of the rightmost report
+      // cards.  See ReportBuilderPage's matching usage for the
+      // macOS overlay-scrollbar rationale.
+      // 24 px right gutter total: 16 px scrollbar lane
+      // (`pr-[16px]`) + 8 px outer breathing room (`mr-2`) so the
+      // scrollbar doesn't hug the viewport edge.  Mirrors the
+      // canvas treatment in `ReportBuilderPage`.  See that file
+      // for the `scrollbar-gutter: stable` rationale.
+      className="h-full overflow-y-auto canvas-scrollbar bg-white mr-2 pr-[16px]"
       style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
     >
       {/* TopAppBar pinned to the scroll container's top — Figma
