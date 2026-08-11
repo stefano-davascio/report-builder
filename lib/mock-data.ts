@@ -37,7 +37,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   // ── Cross-network (multi-platform) ──────────────────────────────────────
   {
     id: 'audience-growth',
-    name: 'Audience Growth',
+    name: 'Audience growth',
     description: 'Tracks net follower change over time across supported platforms.',
     platforms: ['tiktok', 'facebook', 'instagram'],
     supportedChartTypes: ['line', 'area', 'bar'],
@@ -496,7 +496,12 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   // module in subsequent passes.
   {
     id: 'tiktok-best-performing-day-summary',
-    name: 'Best performing day summary',
+    // Renamed per Figma 2486:55663 — the module now covers
+    // publishing behaviour more broadly than the "best-day"
+    // framing.  Definition id stays for preset / storage
+    // compatibility (used by `mod-tt-best-perf` in
+    // `reports-data.ts` + persisted user layouts).
+    name: 'Publishing behaviour summary',
     description: 'Quick summary of the selected period — total published videos, most frequent posting day and time.',
     platforms: ['tiktok'],
     supportedChartTypes: ['list'],
@@ -535,15 +540,16 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     category: 'TikTok',
     icon: '💬',
     defaultW: 4,
-    // h:24 → 24 × 13 (CHART_H_FACTOR) = 312 NEW rows × 2 px
-    // (ROW_HEIGHT) = 624 raw, minus the 78 px module chrome (20 px
-    // padding top+bottom, 14 px title row, 24 px header gap)
-    // = 546 px usable.  The card is a fixed 479 px tall and the
-    // footer + 16 px gap eats ~52 px, leaving ~15 px of breathing
-    // room at the bottom.
-    defaultH: 24,
-    // Vertical resize is meaningless for this module — each card is
-    // a fixed 240 × 479 px, so dragging the corner taller just adds
+    // Height math tuned for the Figma 2704 redesign — cards shrank
+    // from 240 × 479 to 244 × 320.  h:18 → 452 px wrapper:
+    // 20 (top pad) + 21 (title) + 24 (title→content gap) + 320
+    // (card strip) + 16 (gap to footer) + 20 (footer w/ network
+    // badge) + 20 (bottom pad).  h:17 was tempting for tightness
+    // but clipped the footer network badge inside the wrapper's
+    // overflow-hidden clip.
+    defaultH: 18,
+    // Vertical resize is meaningless — each card is a fixed
+    // 244 × 320 px, so dragging the corner taller just adds
     // invisible padding above the footer.  Lock at defaultH so the
     // corner grip only changes width.
     fixedHeight: true,
@@ -558,7 +564,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     category: 'TikTok',
     icon: '⏱️',
     defaultW: 4,
-    defaultH: 24,
+    defaultH: 18,
     fixedHeight: true,
   },
   {
@@ -571,7 +577,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     category: 'TikTok',
     icon: '🔀',
     defaultW: 4,
-    defaultH: 24,
+    defaultH: 18,
     fixedHeight: true,
   },
 ];

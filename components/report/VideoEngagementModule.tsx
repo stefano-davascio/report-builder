@@ -36,6 +36,7 @@ import { MockProfile } from '@/lib/profile-data';
 import { ModuleNetworks } from './ModuleNetworks';
 import { COMPACT_NETWORKS_THRESHOLD_PX } from './AudienceGrowthModule';
 import { IconArrowLeft, IconArrowRight } from '@/components/icons/SendiIcons';
+import { VideoPostBox } from './VideoPostBox';
 
 /**
  * Animated `scrollBy` that bypasses Chrome's broken native
@@ -62,95 +63,19 @@ function smoothScrollBy(el: HTMLElement, deltaX: number, durationMs = 320) {
   requestAnimationFrame(tick);
 }
 
-const CARD_WIDTH = 240;
-/** Thumbnail height per Figma 2222:40954 — 249 px.  Same as the
- *  original; the card chrome (and the surrounding preset layout)
- *  is built around this number. */
-const THUMB_HEIGHT = 249;
-/** Total card height per Figma 2222:40922 — sum of the three
- *  vertical sections (details 118 + thumbnail 249 + summary 112). */
-const CARD_HEIGHT = 479;
+// Card geometry per Figma 2704:56280 — same 244 × 320 tile as its
+// sister modules (Video sources / Video watch metrics).  The
+// summary rows below the shared `VideoPostBox` differ in count
+// (engagement: 4 · sources: 7 · watch-metrics: 3); the post-box
+// itself is identical, extracted into the shared component so all
+// three carousels stay locked to the same top-section geometry.
+const CARD_WIDTH = 244;
+const CARD_HEIGHT = 320;
+const CARD_INNER_PADDING = 6;
 const CARD_GAP = 24;
 /** One-click advance = exactly one card + one gap, so the next card
  *  lines up flush with the strip's left edge. */
 const SCROLL_STEP = CARD_WIDTH + CARD_GAP;
-
-// ── Inline SVG helpers ────────────────────────────────────────────────────
-// Two inline icons that don't have full-size equivalents in
-// `SendiIcons.tsx` because they only appear here:
-//   • TikTokBadge — 14 × 14 black circle with a 2 px white ring,
-//                   sitting bottom-right on the avatar.  The white
-//                   silhouette is a hand-simplified version of the
-//                   black-layer path from `IconNetworkTikTok`
-//                   (NetworkIcons.tsx) — the full multi-color glyph
-//                   would be illegible at 10 px.
-//   • PlayIcon   — 48 × 48 white triangle, no background fill, with a
-//                   drop-shadow so it reads cleanly on any gradient
-//                   thumbnail tint.
-
-function TikTokBadge() {
-  return (
-    <div
-      aria-hidden
-      className="absolute bg-black rounded-full"
-      style={{
-        // Visual is exactly 14 × 14 with a 2 px white border eaten
-        // INTO the 14 (box-sizing: border-box) so the black core is
-        // 10 × 10. Previously used `boxShadow: 0 0 0 2px #fff` which
-        // painted the 2 px ring OUTSIDE the 14 — total visual was
-        // 18 × 18 and read as oversized vs Figma 2222:40948.
-        bottom: -3,
-        left: 19,
-        width: 14,
-        height: 14,
-        border: '2px solid #fff',
-        boxSizing: 'border-box',
-      }}
-    >
-      <svg
-        viewBox="0 0 17 20"
-        width={8}
-        height={8}
-        // 8 × 8 with 1 px inset keeps the glyph inside the CIRCULAR
-        // 10 × 10 inner area — at 10 × 10 the path's corners pushed
-        // outside the badge's `rounded-full` clip and the silhouette
-        // turned into an unrecognizable smudge.
-        style={{ position: 'absolute', left: 1, top: 1 }}
-      >
-        <path
-          d="M12.30 13.49V6.12C13.77 7.18 15.54 7.75 17.35 7.75V4.93C16.28 4.70 15.32 4.13 14.61 3.31C14.03 2.93 13.54 2.45 13.16 1.88C12.78 1.31 12.52 0.67 12.39 0H9.74V14.54C9.70 15.17 9.47 15.77 9.09 16.26C8.70 16.75 8.17 17.12 7.57 17.30C6.97 17.48 6.33 17.47 5.73 17.27C5.13 17.08 4.61 16.71 4.23 16.21C3.65 15.88 3.18 15.37 2.91 14.75C2.64 14.14 2.58 13.45 2.74 12.80C2.90 12.14 3.27 11.56 3.80 11.14C4.32 10.72 4.97 10.48 5.64 10.46C5.95 10.45 6.25 10.49 6.54 10.56V7.75C5.25 7.77 3.99 8.17 2.92 8.89C1.85 9.62 1.02 10.64 0.52 11.83C0.02 13.02 -0.12 14.33 0.11 15.60C0.34 16.87 0.94 18.05 1.82 18.98C2.82 19.68 3.99 20.10 5.21 20.17C6.43 20.25 7.64 19.99 8.72 19.43C9.80 18.87 10.71 18.02 11.34 16.98C11.97 15.93 12.30 14.74 12.30 13.52V13.49Z"
-          fill="#fff"
-        />
-      </svg>
-    </div>
-  );
-}
-
-function PlayIcon() {
-  return (
-    <svg
-      viewBox="0 0 48 48"
-      width={48}
-      height={48}
-      fill="none"
-      aria-hidden
-    >
-      {/* Hollow 28 × 36 triangle, stroked at 3 px with rounded
-          line caps + joins — matches the Figma play icon the user
-          supplied directly.  Stroke colour is `#D2D2D3`
-          (DARK/dark--tint_80) so the outline reads as a soft
-          decorative play affordance on any gradient thumbnail
-          rather than competing with the content. */}
-      <path
-        d="M14 6L42 24L14 42V6Z"
-        stroke="#D2D2D3"
-        strokeWidth={3}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 // ── Carousel "next" button ────────────────────────────────────────────────
 // Floating 48 × 48 circle pinned to the strip's right edge.  The
@@ -187,9 +112,9 @@ function CarouselScrollButton({
       }}
     >
       {side === 'prev' ? (
-        <IconArrowLeft size={24} color="#201E24" />
+        <IconArrowLeft size={24} color="#585764" />
       ) : (
-        <IconArrowRight size={24} color="#201E24" />
+        <IconArrowRight size={24} color="#585764" />
       )}
     </button>
   );
@@ -200,190 +125,72 @@ function CarouselScrollButton({
 function VideoCard({ card }: { card: VideoCardData }) {
   return (
     <div
-      className="bg-white border border-[#D2D2D3] rounded-[4px] overflow-clip flex flex-col flex-shrink-0"
+      className="bg-white flex flex-col flex-shrink-0 overflow-clip"
       style={{
         width: CARD_WIDTH,
         height: CARD_HEIGHT,
+        borderRadius: 12,
+        border: '1px solid rgba(32,30,36,0.1)',
+        padding: CARD_INNER_PADDING,
         scrollSnapAlign: 'start',
       }}
     >
-      {/* Details — date row + profile chip + caption */}
+      <VideoPostBox
+        date={card.date}
+        profile={card.profile}
+        caption={card.caption}
+        image={card.image}
+      />
+
+      {/* Summary — 4-row engagement-metric table (Views / Likes /
+          Comments / Shares).  `flex-1 min-h-0` distributes the rows
+          across the leftover vertical space so the fixed-height
+          card is always fully filled.  Row internals mirror the
+          Video sources summary block for cross-carousel parity. */}
       <div
-        className="flex flex-col items-start w-full"
-        style={{ padding: '8px 16px', gap: 8 }}
-      >
-        <p
-          className="w-full"
-          style={{
-            fontFamily: 'IBM Plex Sans, sans-serif',
-            fontSize: 12,
-            lineHeight: '16px',
-            color: '#626165',
-            // Left-aligned per the rendered Figma 2222:40944, even
-            // though the auto-extracted code carries `text-right` —
-            // in the live design the date sits at the top-LEFT of
-            // the card, flush with the avatar / caption stack
-            // beneath it.
-            textAlign: 'left',
-            letterSpacing: 0.3,
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {card.date}
-        </p>
-        <div className="flex items-start gap-[8px] w-full">
-          {/* Avatar — 32 × 32 purple square with monogram + TikTok badge */}
-          <div
-            className="relative flex items-center justify-center flex-shrink-0"
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 4,
-              background: '#9486FF',
-              border: '1px solid rgba(32,30,36,0.2)',
-            }}
-          >
-            <span
-              style={{
-                fontFamily: 'IBM Plex Sans, sans-serif',
-                fontWeight: 500,
-                fontSize: 14,
-                lineHeight: '18px',
-                color: 'rgba(32,30,36,0.8)',
-                letterSpacing: 0.07,
-              }}
-            >
-              {card.profile.monogram}
-            </span>
-            <TikTokBadge />
-          </div>
-          {/* Profile name + handle */}
-          <div
-            className="flex flex-col justify-center min-w-0"
-            style={{ paddingLeft: 4, height: 32 }}
-          >
-            <p
-              className="truncate"
-              style={{
-                fontFamily: 'IBM Plex Sans, sans-serif',
-                fontWeight: 500,
-                fontSize: 12,
-                lineHeight: '18px',
-                color: '#201E24',
-              }}
-            >
-              {card.profile.name}
-            </p>
-            <p
-              className="truncate"
-              style={{
-                fontFamily: 'IBM Plex Sans, sans-serif',
-                fontSize: 12,
-                lineHeight: '16px',
-                color: '#626165',
-                letterSpacing: 0.3,
-              }}
-            >
-              {card.profile.handle}
-            </p>
-          </div>
-        </div>
-        {/* Caption — 2-line ellipsis truncation, fixed 36 px box so the
-            details section's height stays constant card-to-card
-            regardless of caption length. */}
-        <p
-          style={{
-            fontFamily: 'IBM Plex Sans, sans-serif',
-            fontSize: 12,
-            lineHeight: '18px',
-            color: '#201E24',
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            width: '100%',
-            height: 36,
-          }}
-        >
-          {card.caption}
-        </p>
-      </div>
-      {/* Attachment — gradient backdrop with a centered 9 : 16
-          TikTok video preview filling the full thumbnail height.
-          The outer 240 × 249 thumbnail stays Figma-spec; inside, the
-          140 × 249 dark preview reads as a TikTok-aspect video frame
-          (140 / 249 = 0.5622 ≈ 9 / 16 = 0.5625) with the gradient
-          showing through as a 50 px backdrop on each side, the way
-          TikTok feeds letterbox portrait videos. */}
-      <div
-        className="relative flex items-center justify-center flex-shrink-0"
-        style={{
-          width: CARD_WIDTH,
-          height: THUMB_HEIGHT,
-          background: card.thumbnail,
-        }}
-      >
-        <div
-          className="relative flex items-center justify-center"
-          style={{
-            // Exact 9 : 16 at the thumbnail's 249 px height.
-            width: 140,
-            height: THUMB_HEIGHT,
-            // Per-card placeholder image (picsum.photos seeded
-            // JPEG, see `VIDEO_PREVIEW_IMAGE` in mock-data.ts) so
-            // every card reads as a different post.  `#1A1A1F` is
-            // the fallback fill while the image streams in, so the
-            // first-paint frame still reads as a paused video
-            // rather than flashing white before the image
-            // resolves.  `background-size: cover` crops the
-            // landscape source to the portrait inset without
-            // distorting it.
-            background: `#1A1A1F url(${card.image}) center/cover no-repeat`,
-          }}
-        >
-          <PlayIcon />
-        </div>
-      </div>
-      {/* Summary — 4-row metric table.  Each row has a bottom border
-          except the last, matching the Figma's `border-b` on rows 1–3
-          and no border on the final Shares row. */}
-      <div
-        className="flex flex-col flex-shrink-0 w-full"
-        style={{ padding: '8px 16px' }}
+        className="flex flex-col flex-1 min-h-0 w-full"
+        style={{ paddingTop: 8, paddingLeft: 2, paddingRight: 2 }}
       >
         {card.metrics.map((row, i) => (
           <div
             key={row.label}
-            className="flex items-start w-full"
+            className="flex flex-1 items-center w-full"
             style={{
               gap: 4,
               padding: '4px 0',
               borderBottom:
-                i < card.metrics.length - 1 ? '1px solid #E8E8E9' : 'none',
+                i < card.metrics.length - 1
+                  ? '1px solid rgba(32,30,36,0.1)'
+                  : 'none',
             }}
           >
             <p
+              className="flex-1 min-w-0"
               style={{
                 fontFamily: 'IBM Plex Sans, sans-serif',
                 fontSize: 12,
                 lineHeight: '16px',
-                color: '#201E24',
                 letterSpacing: 0.3,
-                flex: '1 0 0',
-                minWidth: 1,
+                color: '#4C4B4F',
               }}
             >
               {row.label}
             </p>
             <p
-              className="tabular-nums"
+              className="tabular-nums flex-shrink-0"
               style={{
                 fontFamily: 'IBM Plex Sans, sans-serif',
+                fontWeight: 500,
                 fontSize: 12,
+                // 16 px line-height (not 18 as the design tokens
+                // spell out for `Sans-Medium/12`) so the value's
+                // intrinsic line box matches the label's — otherwise
+                // `items-center` locks each row to the taller side
+                // and the summary overflows the fixed 320-px card
+                // height.  See VideoSourcesModule for the geometry
+                // walk-through.
                 lineHeight: '16px',
-                color: '#626165',
-                letterSpacing: 0.3,
+                color: '#201E24',
                 textAlign: 'right',
                 minWidth: 88,
                 whiteSpace: 'nowrap',

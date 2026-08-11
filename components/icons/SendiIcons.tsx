@@ -888,6 +888,79 @@ export function IconCheck({ className, size = 16, color = 'currentColor' }: Icon
   );
 }
 
+// Figma 2704:54361 — hollow / stroke-only play triangle used
+// inside the video carousels' 48-px preview thumbnails.  Path +
+// viewBox lifted verbatim from the Figma SVG source (asset
+// `2fcfabb7e13a9f215662470ae081c34e1d010cea.svg`): native viewBox
+// `10.3333 × 13`, path `M0.5 0.5 L9.83 6.5 L0.5 12.5 V0.5 Z`
+// with 0.5 stroke margin around a 9.33 × 12 glyph.  Uses the
+// shared `{...S}` stroke pattern (`stroke-width: 1.5`, round
+// caps + joins) so the outline reads consistently with every
+// other stroked icon in the library.  No fill — the triangle
+// stays hollow per the Figma source.
+//
+// Tile overrides scale the native to 15.5 × 19.5 within the
+// 24-outer viewBox so the visible glyph fills 9.33 × 12 CSS px
+// at the default 16-CSS-px display — matching Figma's
+// `inset-[12.5% 12.5% 12.5% 29.17%]` proportions inside its own
+// 16-tile "Play icon" container exactly.
+export function IconPlay({ className, size = 16, color = 'currentColor' }: IconProps) {
+  return (
+    <FigmaIcon
+      size={size}
+      color={color}
+      nativeW={10.3333}
+      nativeH={13}
+      tileW={15.5}
+      tileH={19.5}
+      className={className}
+    >
+      <path d="M0.5 0.5L9.83333 6.5L0.5 12.5V0.5Z" {...S} />
+    </FigmaIcon>
+  );
+}
+
+// TikTok "badge" glyph — self-contained 20 × 20 chip with the
+// white circle background + multi-color TikTok mark baked into
+// one path stack.  Distinct from `IconNetworkTikTok`
+// (NetworkIcons.tsx) which renders JUST the multi-color mark and
+// relies on the caller to supply a surrounding chip / background.
+//
+// Native SVG authored at 20 × 20 (viewBox `0 0 20 20`) with the
+// path coordinates hand-tuned so the mark stays crisp when
+// down-scaled to 14 – 20 CSS px avatar overlays.  Use this variant
+// when the target surface is a small avatar chip (video-card
+// avatars, comment-thread avatars, etc.); reach for
+// `IconNetworkTikTok` when you're painting a bare mark on top of
+// your own container.
+export function IconTikTokBadge({ className, size = 20 }: IconProps) {
+  return (
+    <svg
+      className={className}
+      aria-hidden
+      width={size}
+      height={size}
+      viewBox="0 0 20 20"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <rect width="20" height="20" rx="10" fill="white" />
+      <path
+        d="M7.97405 7.82617C8.17555 7.82858 8.37705 7.84389 8.57659 7.87207V8.44336C7.7158 8.45896 6.87804 8.72487 6.16545 9.20801C5.4529 9.69114 4.89602 10.3712 4.56291 11.165C4.22994 11.9587 4.13513 12.832 4.28948 13.6787C4.44392 14.5256 4.84123 15.3094 5.43303 15.9346C4.64922 15.3963 4.05802 14.6214 3.74748 13.7227C3.43694 12.8239 3.42306 11.8488 3.70745 10.9414C3.99184 10.034 4.55961 9.24142 5.32756 8.68066C6.09547 8.11996 7.02324 7.82082 7.97405 7.82617ZM12.4194 2.66699C12.4249 2.87273 12.4487 3.07781 12.4906 3.2793H10.725V12.96C10.7026 13.4861 10.4775 13.9834 10.0971 14.3477C9.71678 14.7117 9.2105 14.9145 8.68401 14.9141C8.36506 14.9131 8.05045 14.8377 7.76604 14.6934C7.48162 14.5489 7.23436 14.34 7.04534 14.083C7.34903 14.2376 7.6871 14.313 8.02776 14.3037C8.36822 14.2943 8.70089 14.2001 8.99553 14.0293C9.29031 13.8583 9.53802 13.6163 9.71526 13.3252C9.89241 13.0343 9.99352 12.7035 10.0102 12.3633V2.66699H12.4194ZM13.9555 5.4834C14.4991 5.83713 15.1341 6.02516 15.7826 6.02441V6.56543C15.0727 6.4119 14.4314 6.03214 13.9555 5.4834Z"
+        fill="#25F4EE"
+      />
+      <path
+        d="M15.7822 6.56506C16.0117 6.61643 16.2463 6.64271 16.4814 6.64221V9.05627C15.2766 9.05665 14.1021 8.67786 13.124 7.97424V12.8727C13.1317 13.7676 12.8683 14.6444 12.3691 15.3873C11.87 16.1302 11.1577 16.7047 10.3262 17.0358C9.49461 17.3668 8.58219 17.4393 7.70898 17.2428C6.83588 17.0463 6.04214 16.5905 5.43262 15.9352C6.09984 16.4024 6.88342 16.6771 7.69629 16.7291C8.50908 16.7811 9.32072 16.6084 10.042 16.2301C10.7633 15.8518 11.3668 15.2819 11.7861 14.5836C12.2053 13.8855 12.4239 13.0854 12.4189 12.2711V7.36194C13.3988 8.06611 14.5756 8.44471 15.7822 8.44397V6.56506ZM8.69434 8.43811C8.8939 8.43874 9.09322 8.45257 9.29102 8.47913V10.9283C9.09841 10.8652 8.89702 10.8328 8.69434 10.8317C8.15313 10.8317 7.63376 11.0467 7.25098 11.4293C6.86826 11.812 6.65246 12.3315 6.65234 12.8727C6.64866 13.3023 6.78561 13.7216 7.04102 14.067C6.64845 13.8501 6.33811 13.5101 6.1582 13.0992C5.97836 12.6885 5.93818 12.23 6.04492 11.7946C6.15179 11.359 6.3994 10.97 6.74902 10.6891C7.09861 10.4082 7.53116 10.2505 7.97949 10.2399C8.18128 10.2384 8.38217 10.2664 8.57617 10.3219V8.43811H8.69434ZM13.124 3.27893C13.1236 4.08966 13.4168 4.87349 13.9502 5.48401C13.5683 5.23566 13.241 4.91187 12.9883 4.53284C12.7356 4.1538 12.5628 3.72697 12.4805 3.27893H13.124Z"
+        fill="#FE2C55"
+      />
+      <path
+        d="M12.4189 12.2709V7.36163C13.3988 8.06583 14.5752 8.44429 15.7819 8.44352V6.56553C15.0719 6.412 14.4309 6.03238 13.955 5.48365C13.5728 5.23452 13.2447 4.91089 12.9904 4.5321C12.7361 4.15331 12.5609 3.72713 12.475 3.27905H10.7093V12.9752C10.6848 13.3925 10.5329 13.7922 10.2739 14.1203C10.0149 14.4484 9.66149 14.6891 9.26132 14.8099C8.86115 14.9307 8.43355 14.9257 8.03631 14.7956C7.63906 14.6655 7.29132 14.4166 7.04009 14.0826C6.64751 13.8657 6.3373 13.5255 6.1574 13.1146C5.9775 12.7038 5.93793 12.2451 6.04479 11.8095C6.15166 11.3739 6.39902 10.9856 6.74864 10.7047C7.09827 10.4237 7.53069 10.2658 7.97908 10.2552C8.18032 10.2469 8.38165 10.2692 8.57616 10.3215V8.44352C7.71537 8.45912 6.87768 8.72465 6.16509 9.20778C5.4525 9.69092 4.89575 10.3708 4.56263 11.1647C4.2295 11.9586 4.13438 12.8322 4.28883 13.6791C4.44329 14.5261 4.84066 15.3099 5.43257 15.935C6.09838 16.4012 6.87938 16.6757 7.69045 16.7285C8.50152 16.7814 9.31154 16.6106 10.0322 16.2347C10.7529 15.8588 11.3565 15.2924 11.7774 14.597C12.1982 13.9017 12.4201 13.1041 12.4189 12.2913V12.2709Z"
+        fill="black"
+      />
+    </svg>
+  );
+}
+
 // Figma: share (1133:104401).
 export function IconShare({ className, size = 20, color = 'currentColor' }: IconProps) {
   return (

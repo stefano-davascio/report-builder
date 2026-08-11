@@ -179,22 +179,25 @@ function presetTikTokOnly(): ReportModule[] {
     { id: 'mod-tt-best-eng',           definitionId: 'tiktok-best-engaging-day',    chartType: 'list',
       layout: { i: 'mod-tt-best-eng',           x: 2, y: 84, w: 2, h: 12, minW: 1, minH: 12 } },
 
-    // Rows 7–9 (y=96 / 120 / 144, h=24 each) — video carousels
-    // stacked full-width.  Each card is a Figma-spec 240 × 479 px,
-    // so the module's height is fully determined by the card +
-    // footer + chrome (h=24 lands flush).  `minH === maxH === 24`
-    // locks the height during a corner-drag resize so only the
-    // width changes — vertical resize would just stretch invisible
+    // Rows 7–9 (y=96 / 114 / 132, h=18 each) — video carousels
+    // stacked full-width.  Each card is a Figma-spec 244 × 320 px
+    // per the 2704 redesign (was 240 × 479 pre-refresh, which is
+    // why the earlier layout allocated 24 rows / module).  The
+    // module's height is fully determined by the card + footer +
+    // chrome, so h=18 lands flush.  `minH === maxH === 18` locks
+    // the height during a corner-drag resize so only the width
+    // changes — vertical resize would just stretch invisible
     // padding above the footer with no visible effect.
     { id: 'mod-tt-vid-engagement',     definitionId: 'tiktok-video-engagement',     chartType: 'list',
-      layout: { i: 'mod-tt-vid-engagement',     x: 0, y: 96,  w: 4, h: 24, minW: 1, minH: 24, maxH: 24 } },
+      layout: { i: 'mod-tt-vid-engagement',     x: 0, y: 96,  w: 4, h: 18, minW: 1, minH: 18, maxH: 18 } },
     { id: 'mod-tt-vid-watch-metrics',  definitionId: 'tiktok-video-watch-metrics',  chartType: 'list',
-      layout: { i: 'mod-tt-vid-watch-metrics',  x: 0, y: 120, w: 4, h: 24, minW: 1, minH: 24, maxH: 24 } },
+      layout: { i: 'mod-tt-vid-watch-metrics',  x: 0, y: 114, w: 4, h: 18, minW: 1, minH: 18, maxH: 18 } },
     { id: 'mod-tt-vid-sources',        definitionId: 'tiktok-video-sources',        chartType: 'list',
-      layout: { i: 'mod-tt-vid-sources',        x: 0, y: 144, w: 4, h: 24, minW: 1, minH: 24, maxH: 24 } },
+      layout: { i: 'mod-tt-vid-sources',        x: 0, y: 132, w: 4, h: 18, minW: 1, minH: 18, maxH: 18 } },
 
-    // Row 10 (y=168, h=18) — audience demographics pair (closes
-    // the template).
+    // Row 10 (y=150, h=18) — audience demographics pair (closes
+    // the template).  Shifted up 18 rows to close the gap left by
+    // shrinking the video carousels from h=24 to h=18.
     { id: 'mod-tt-aud-gender',         definitionId: 'audience-by-gender',          chartType: 'pie',
       // `network: 'tiktok'` swaps the donut slice palette from
       // the cross-network green / blue / orange ramp to the
@@ -202,9 +205,9 @@ function presetTikTokOnly(): ReportModule[] {
       // (Figma 2467:42088).  See `getGenderColors` in
       // `AudienceByGenderModule.tsx`.
       network: 'tiktok',
-      layout: { i: 'mod-tt-aud-gender',         x: 0, y: 168, w: 2, h: 18, minW: 1, minH: 12 } },
+      layout: { i: 'mod-tt-aud-gender',         x: 0, y: 150, w: 2, h: 18, minW: 1, minH: 12 } },
     { id: 'mod-tt-aud-country',        definitionId: 'audience-by-country',         chartType: 'list',
-      layout: { i: 'mod-tt-aud-country',        x: 2, y: 168, w: 2, h: 18, minW: 1, minH: 12 } },
+      layout: { i: 'mod-tt-aud-country',        x: 2, y: 150, w: 2, h: 18, minW: 1, minH: 12 } },
   ];
   // `app/page.tsx` calls `reissueModuleIds(template.modules())` on
   // template click so each spawned report gets fresh ids — the literal
