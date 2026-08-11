@@ -67,19 +67,23 @@ export function SummaryCardModule({
       style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
     >
       {/* Row stack — outer `flex-1` so the stack takes the available
-          height; each row is also `flex-1` so the four rows distribute
+          height; each row is also `flex-1` so the rows distribute
           that space evenly (matches Figma's `flex-[1_0_0]` rows).
-          Per Figma each row carries a 1 px **top** border (so the
-          first row gets a divider against the header gap, and the
-          last row's bottom edge is owned by the card's own padding). */}
+          Per Figma 2486:55663 the first row has NO top border — only
+          the divider between adjacent rows.  Label is
+          DARK/dark--tint_20 (#4C4B4F); value is BRAND/dark (#201E24)
+          in Sans-Medium 12/18 so the number reads with weight
+          against the muted label. */}
       <div className="flex-1 flex flex-col min-h-0">
-        {rows.map((row) => (
+        {rows.map((row, i) => (
           <div
             key={row.label}
-            className="flex-1 flex items-center justify-between gap-4 border-t border-[#E8E8E9]"
+            className={`flex-1 flex items-center justify-between gap-4 ${
+              i > 0 ? 'border-t border-[#E8E8E9]' : ''
+            }`}
           >
             <span
-              className="text-[#363439]"
+              className="text-[#4C4B4F]"
               style={{ fontSize: 12, lineHeight: '18px' }}
             >
               {row.label}
@@ -95,15 +99,15 @@ export function SummaryCardModule({
                 className={`flex items-center gap-[6px] tabular-nums whitespace-nowrap text-right ${
                   row.trend === 'up' ? 'text-[#006B43]' : 'text-[#CE091C]'
                 }`}
-                style={{ fontSize: 12, lineHeight: '18px' }}
+                style={{ fontSize: 12, lineHeight: '18px', fontWeight: 500 }}
               >
                 {row.trend === 'up' ? <IconTrendUp size={16} /> : <IconTrendDown size={16} />}
                 {row.value}
               </span>
             ) : (
               <span
-                className="text-[#626165] tabular-nums text-right"
-                style={{ fontSize: 12, lineHeight: '18px' }}
+                className="text-[#201E24] tabular-nums text-right"
+                style={{ fontSize: 12, lineHeight: '18px', fontWeight: 500 }}
               >
                 {row.value}
               </span>

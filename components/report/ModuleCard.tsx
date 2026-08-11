@@ -469,7 +469,11 @@ function getModuleContent(
     return (
       <TimeSeriesAreaModule
         data={seriesData}
-        color="#0075DB"
+        // colors/palette/blue/500 — matches Audience growth's
+        // netFollowers stroke and Video views by day per Figma
+        // 2895:69723.  Was `#0075DB`; swapped to the design-token
+        // hue so the whole area-chart family reads as one blue.
+        color="#0570DE"
         label={def.name}
         contentHeight={contentHeight}
         contentWidth={contentWidth}

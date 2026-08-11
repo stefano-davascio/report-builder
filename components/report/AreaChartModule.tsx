@@ -42,11 +42,13 @@ import { useChartCurveStyle } from '@/lib/chart-style-context';
 // Y-axis gutter matches the area chart (32 px so "1k" at 12 px fits).
 const Y_AXIS_W = 32;
 
-// Translucent-fill opacity matches Audience Growth's 3-series area
-// (Figma 1302:170369). Single-series modules using a primary token as
-// stroke + the same token at this opacity as fill produce a band that
-// reads as a flat tint rather than a saturated wash.
-const FILL_OPACITY = 0.18;
+// Top-of-gradient opacity for the fill wash — matches Audience
+// Growth (Figma 2895:68528).  The area now paints a top-to-bottom
+// linear gradient (color at 20 % opacity right below the line,
+// fully transparent at the x-axis) instead of the earlier flat
+// 18 % fill, so the wash reads as a fade toward the baseline
+// exactly like the multi-series Audience growth chart.
+const GRADIENT_TOP_OPACITY = 0.2;
 
 /**
  * Pick a "nice" Y-axis ceiling + tick array that hugs the data max
@@ -89,9 +91,10 @@ function computeNiceYAxis(dataMax: number): {
 interface TimeSeriesAreaModuleProps {
   data: MockDataPoint[];
   /**
-   * Single-series stroke + fill color. Pass a design-system token
-   * (e.g. `#0075DB` for "platform blue"). The fill uses the same
-   * token at `FILL_OPACITY` opacity.
+   * Single-series stroke + fill color.  Pass a design-system token
+   * (e.g. `#0570DE` for blue-500).  The fill is a top-to-bottom
+   * linear gradient of this hue — full at `GRADIENT_TOP_OPACITY`
+   * right below the line, fully transparent at the baseline.
    */
   color: string;
   /** Series label — shown in the legend swatch and the tooltip. */
@@ -172,6 +175,27 @@ export function TimeSeriesAreaModule({
               ticks={yTicks}
               allowDecimals={false}
             />
+            {/* Top-to-bottom linear-gradient fill — matches Audience
+                growth's treatment (Figma 2895:68528).  The area
+                fades from the series color at `GRADIENT_TOP_OPACITY`
+                right below the line to fully transparent at the
+                x-axis baseline, so the wash never darkens the
+                gridlines behind it.  ID includes the color hex so
+                two areas with different colors (e.g. an area module
+                paired with something else) don't collide on the
+                same document-wide gradient id. */}
+            <defs>
+              <linearGradient
+                id={`area-fill-${color.replace('#', '')}`}
+                x1={0}
+                y1={0}
+                x2={0}
+                y2={1}
+              >
+                <stop offset="0%" stopColor={color} stopOpacity={GRADIENT_TOP_OPACITY} />
+                <stop offset="100%" stopColor={color} stopOpacity={0} />
+              </linearGradient>
+            </defs>
             <Tooltip
               content={singleSeriesTooltipContent}
               cursor={{ stroke: '#C4C3C6', strokeDasharray: '3 3' }}
@@ -181,9 +205,12 @@ export function TimeSeriesAreaModule({
               dataKey="value"
               name={label}
               stroke={color}
-              strokeWidth={1.5}
-              fill={color}
-              fillOpacity={FILL_OPACITY}
+              strokeWidth={2}
+              // Gradient carries the alpha, so `fillOpacity` stays
+              // at 1 and the gradient's stop-opacities drive the
+              // wash intensity.
+              fill={`url(#area-fill-${color.replace('#', '')})`}
+              fillOpacity={1}
               dot={false}
               activeDot={{ r: 3, strokeWidth: 0, fill: color }}
               isAnimationActive={false}

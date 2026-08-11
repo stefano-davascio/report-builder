@@ -42,13 +42,31 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type RechartsTickProps = any;
 
+// Recognizes date-string labels of the form "<Mon> <day>" — the shape
+// every time-series chart in the report emits from `generateData()`.
+// If a tick value doesn't match (e.g. hour labels like "12 AM"), we
+// leave it as-is and skip the month-strip rule.
+const DATE_TICK_RE =
+  /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d+)$/;
+
 /**
  * Build a tick renderer for an XAxis whose `ticks` prop is `xTicks`.
- * The first/last tick anchor to the plot edges so we can run zero
- * horizontal margin without the outermost labels overflowing.
+ *
+ * Two responsibilities:
+ *   1. Anchor endpoints — the first tick anchors `start`, the last
+ *      `end` so we can run zero horizontal margin without the
+ *      outermost labels overflowing the plot edges.
+ *   2. Month-prefix rule (Figma 2895:68528) — for `<Mon> <day>`
+ *      date ticks, the first tick and any tick whose month differs
+ *      from the previous tick show the full "<Mon> <day>" (e.g.
+ *      "Mar 4", "Apr 1"); every other tick shows just the day
+ *      number ("8", "12", "16"…).  This cuts axis clutter without
+ *      losing the month transition.  Non-date labels (e.g. hour
+ *      strings on Followers online) pass through untouched.
  *
  * Caller passes the same `xTicks` array it gave to `<XAxis ticks=…>`
- * so the renderer can detect the endpoints by index.
+ * so the renderer can look up the previous tick by index and detect
+ * month boundaries.
  */
 export function renderTimeSeriesXTick(xTicks: string[]) {
   return (props: RechartsTickProps) => {
@@ -56,6 +74,22 @@ export function renderTimeSeriesXTick(xTicks: string[]) {
     const isFirst = index === 0;
     const isLast = index === xTicks.length - 1;
     const anchor: 'start' | 'middle' | 'end' = isFirst ? 'start' : isLast ? 'end' : 'middle';
+
+    const rawValue = String(payload?.value ?? '');
+    const match = rawValue.match(DATE_TICK_RE);
+    let displayValue = rawValue;
+    if (match) {
+      const currentMonth = match[1];
+      const day = match[2];
+      const prevValue = index > 0 ? xTicks[index - 1] : null;
+      const prevMatch = prevValue ? prevValue.match(DATE_TICK_RE) : null;
+      const prevMonth = prevMatch ? prevMatch[1] : null;
+      // Show the month prefix ONLY on the first tick or when the
+      // month changed since the last tick (e.g. "Apr 1" after
+      // "Mar 30").  Every other tick drops to the bare day number.
+      displayValue = isFirst || currentMonth !== prevMonth ? rawValue : day;
+    }
+
     return (
       <text
         x={x}
@@ -66,7 +100,7 @@ export function renderTimeSeriesXTick(xTicks: string[]) {
         fontSize={12}
         fontFamily="IBM Plex Sans, sans-serif"
       >
-        {payload?.value ?? ''}
+        {displayValue}
       </text>
     );
   };

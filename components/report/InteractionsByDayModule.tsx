@@ -50,15 +50,20 @@ import { useChartCurveStyle } from '@/lib/chart-style-context';
 // `subtle` is the area-fill token paired with each `color` stroke —
 // matched to the AudienceGrowth palette so the visual language is
 // consistent across the report.
-// TikTok all-blue palette per Figma 2219:39079.  Stack order (bottom
-// → top) is preserved (Shares → Comments → Likes); the three tones
-// step from darkest (Shares, base of the stack) to lightest (Likes,
-// cap).  `subtle` is the area-fill paired with the matching stroke
-// for the line / area variants.
+// Blue palette per Figma 2486:55934.  Stack order (bottom → top)
+// flips relative to the previous 2219:39079 comp:
+//   • Likes    — dark navy, base of the stack     (blue/700 #04438C)
+//   • Comments — primary blue, middle segment      (blue/500 #0570DE)
+//   • Shares   — cyan, cap                         (blue/300 #06B9EF)
+// The legend now reads "Likes · Comments · Shares" left→right in
+// visual-stack order (bottom→top ⇔ dark→light).  Colors map to the
+// design's three `colors/palette/blue/*` tokens directly.  `subtle`
+// is the paired area-fill for the line/area variants — pale tints of
+// each stroke.
 export const SERIES = [
-  { key: 'shares',   label: 'Shares',   color: '#0050B8', subtle: '#9EC6EA' },
-  { key: 'comments', label: 'Comments', color: '#0570DE', subtle: '#A8CEEC' },
-  { key: 'likes',    label: 'Likes',    color: '#7CB5EB', subtle: '#CFE4F7' },
+  { key: 'likes',    label: 'Likes',    color: '#04438C', subtle: '#C5D4E8' },
+  { key: 'comments', label: 'Comments', color: '#0570DE', subtle: '#CFE6F9' },
+  { key: 'shares',   label: 'Shares',   color: '#06B9EF', subtle: '#B5EAF6' },
 ] as const;
 
 type SeriesKey = (typeof SERIES)[number]['key'];
@@ -136,8 +141,9 @@ function InteractionsBarTooltip({ active, payload }: {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload;
   if (!row) return null;
-  // Render Likes → Comments → Shares so the tooltip reads top-down in
-  // the same visual order as the stacked bar (Likes at top of stack).
+  // Render Shares → Comments → Likes so the tooltip reads top-down in
+  // the same visual order as the stacked bar (Shares at top of stack
+  // per the 2486 reorder — was Likes-on-top in the previous comp).
   const ordered = [...SERIES].reverse();
   return (
     <ModuleTooltipCard title={row.date}>
@@ -212,17 +218,14 @@ interface InteractionsByDayModuleProps {
   profiles?: MockProfile[];
 }
 
-// Y-axis is pinned to a fixed `[0, 1000]` ladder with 100-step ticks
-// so the stacked totals match Figma 2219:39079 exactly regardless of
-// the data peak.  Generated once at module level since the ticks
-// never change.
-// Y-axis domain bumped to 1100 (was 1000) because the largest stack
-// in `MOCK_INTERACTIONS_BY_DAY` is Mar 8 = 320 + 400 + 380 = 1100,
-// which previously poked over the top gridline and left the 11th
-// (topmost) gridline unlabelled.  12 ticks at every 100 means every
-// horizontal line has a matching label.
+// Y-axis pins to a fixed `[0, 1100]` domain with tick labels only
+// through 1000 per Figma 2486:55934.  The top axis label reads "1k"
+// and the plot area extends 100 px above the topmost gridline as
+// pure headroom — the Mar 8 stack in the mock data reaches ~1100 and
+// pokes into that headroom exactly like the design.  Ticks only run
+// to 1000 (11 ticks) so the top of the axis reads clean.
 const BAR_Y_DOMAIN: [number, number] = [0, 1100];
-const BAR_Y_TICKS = Array.from({ length: 12 }, (_, i) => i * 100); // 0…1100
+const BAR_Y_TICKS = Array.from({ length: 11 }, (_, i) => i * 100); // 0…1000
 
 export function InteractionsByDayModule({
   data,
@@ -232,9 +235,9 @@ export function InteractionsByDayModule({
 }: InteractionsByDayModuleProps) {
   const chartH = Math.max(contentHeight - LEGEND_RESERVE, 200);
 
-  // Rounded top corners for the **top** segment only (Likes — last
-  // series in `SERIES`). Middle and bottom segments stay square so
-  // adjacent segments butt cleanly together.
+  // Rounded top corners for the **top** segment only (Shares — last
+  // series in `SERIES` after the 2486 reorder). Middle and bottom
+  // segments stay square so adjacent segments butt cleanly together.
   const TOP_RADIUS: [number, number, number, number] = [4, 4, 0, 0];
   const FLAT_RADIUS: [number, number, number, number] = [0, 0, 0, 0];
 

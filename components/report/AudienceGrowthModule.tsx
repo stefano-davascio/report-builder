@@ -1,17 +1,17 @@
 'use client';
 
 /**
- * Audience Growth chart — Figma frame 1026-38493 (default state),
- * 1168-213840 (hover vs. default comparison). Palette refresh from
- * Figma 1302:170369: each series owns a primary stroke color and a
- * paired subtle fill color. The area fill uses the subtle token at
- * 70% opacity (no gradient) so the three overlapping bands read as
- * flat translucent washes — matches the Figma comp exactly.
+ * Audience Growth chart — Figma frame 2895:68528 (current default),
+ * previously 1026-38493 / 1168-213840 / 1302:170369.  Palette refresh:
+ * each series owns a primary stroke color and a paired subtle fill
+ * color. The area fill uses the subtle token at 70 % opacity (no
+ * gradient) so the three overlapping bands read as flat translucent
+ * washes — matches the Figma comp exactly.
  *
  * Three overlapping area series rendered behind each other:
- *   • Net followers  — stroke #3FA40D / fill #D7F7C2 (green)
- *   • Followers      — stroke #0570DE / fill #CFF5F6 (blue)
- *   • Profile views  — stroke #ED6704 / fill #FCEDB9 (orange)
+ *   • Net followers  — stroke #0570DE / fill #CFE6F9 (blue, top)
+ *   • Followers      — stroke #00C078 / fill #CCF6E6 (green, middle)
+ *   • Profile views  — stroke #E6AE06 / fill #FDF2C3 (yellow, bottom)
  *
  * Visual chrome (per Figma, after the pixel-perfect refinement pass):
  *   • Y-axis ticks: 12 / 18 IBM Plex Sans, DARK/dark--tint_30 (#626165).
@@ -54,29 +54,32 @@ export interface SeriesSpec {
   subtle: string;
 }
 
-// Cross-network palette (Figma 1302:170369) — distinct hues so the
+// Cross-network palette (Figma 2895:68528) — distinct hues so the
 // three overlapping series read as separate bands.  Used by every
 // `audience-growth` module not bound to a specific network.
+//
+// Colors map to the Figma tokens surfaced in the design:
+//   • Net followers → colors/palette/blue/500  (#0570DE)
+//   • Followers     → SUCCESS/success--shade_10 (#00C078)
+//   • Profile views → WARNING/warning--shade_10 (#E6AE06)
+// The ordering (biggest data → smallest) is what places blue on top,
+// green in the middle, yellow along the baseline.
 const SERIES_CROSS_NETWORK: SeriesSpec[] = [
-  { key: 'netFollowers', label: 'Net followers', color: '#3FA40D', subtle: '#D7F7C2' },
-  { key: 'followers',    label: 'Followers',     color: '#0570DE', subtle: '#CFF5F6' },
-  { key: 'profileViews', label: 'Profile views', color: '#ED6704', subtle: '#FCEDB9' },
+  { key: 'netFollowers', label: 'Net followers', color: '#0570DE', subtle: '#CFE6F9' },
+  { key: 'followers',    label: 'Followers',     color: '#00C078', subtle: '#CCF6E6' },
+  { key: 'profileViews', label: 'Profile views', color: '#E6AE06', subtle: '#FDF2C3' },
 ];
 
-// TikTok palette (Figma 2201:51879) — three INFO-blue shades, one
-// per series.  Strokes come straight from the Figma INFO tokens:
-//   • Net followers  — INFO/info--shade_20  (#005BBA, darkest)
-//   • Followers      — INFO/info--shade_10  (#0067D1, medium)
-//   • Profile views  — INFO/info_dark-theme (#1A88FF, lightest)
-// Subtle (area-fill) colors are pale tints of each stroke — picked
-// so the stacked areas read as a soft "blue gradient" stack matching
-// the Figma (palest at the top of the chart where only Net followers
-// is visible, slightly darker mid-chart where Followers overlays,
-// darkest at the very bottom where Profile views' thin strip sits).
+// TikTok palette — Figma 2895:68528 rolls the TikTok Audience-Growth
+// view back to the cross-network blue/green/yellow palette (the
+// earlier 2201:51879 all-blue INFO ramp is superseded).  Kept as a
+// distinct constant rather than folding into `SERIES_CROSS_NETWORK`
+// so `getSeries(network)`'s branching structure survives for any
+// future TikTok-specific palette without another refactor.
 const SERIES_TIKTOK: SeriesSpec[] = [
-  { key: 'netFollowers', label: 'Net followers', color: '#005BBA', subtle: '#C5DDF1' },
-  { key: 'followers',    label: 'Followers',     color: '#0067D1', subtle: '#9BC1E8' },
-  { key: 'profileViews', label: 'Profile views', color: '#1A88FF', subtle: '#7AB0F0' },
+  { key: 'netFollowers', label: 'Net followers', color: '#0570DE', subtle: '#CFE6F9' },
+  { key: 'followers',    label: 'Followers',     color: '#00C078', subtle: '#CCF6E6' },
+  { key: 'profileViews', label: 'Profile views', color: '#E6AE06', subtle: '#FDF2C3' },
 ];
 
 /**
@@ -114,20 +117,24 @@ export type Row = {
 // matter — these anchors fix that by mirroring the comp's
 // proportions exactly.
 //
-// Three series, three bands:
-//   • Followers     — top:    540 → 1100, with a Mar 22 peak ~890
-//   • Net followers — middle: 270 → 350,  with a Mar 30 dip to ~190
-//   • Profile views — bottom: 10–80, thin baseline near the x-axis
+// Three series, three bands (per Figma 2895:68528 — big-to-small,
+// blue-green-yellow, so the biggest curve on top is NET FOLLOWERS
+// in the new naming):
+//   • Net followers — top:    540 → 1000, with a Mar 22 peak ~890
+//   • Followers     — middle: 270 → 340,  with a Mar 30 dip to ~190
+//   • Profile views — bottom: 10–80,      thin baseline near the x-axis
 //
-// Y-domain stays [0, 1200] so the followers ceiling has headroom
-// without re-sizing.
-const FOLLOWERS_ANCHORS = [
+// Y-domain is [0, 1000] — the new design's top-line ceiling.  The
+// old ceiling was 1200 with a 1100-peak on the top curve; capped
+// here to 1000 so the top tick label reads "1k" without any wasted
+// headroom.
+const NET_FOLLOWERS_ANCHORS = [
   540, 580, 610, 650, 670, 680, 690, 695, 700, 700,
   700, 720, 760, 810, 840, 870, 880, 890, 870, 860,
   850, 830, 810, 815, 820, 840, 860, 850, 855, 950,
-  1100,
+  1000,
 ];
-const NET_FOLLOWERS_ANCHORS = [
+const FOLLOWERS_ANCHORS = [
   270, 290, 310, 330, 345, 350, 350, 350, 350, 350,
   345, 380, 420, 450, 470, 480, 485, 480, 460, 440,
   410, 380, 360, 350, 320, 290, 260, 210, 190, 240,
@@ -170,13 +177,14 @@ export function formatYAxis(v: number): string {
  * Pick a y-axis tick count from the available chart-area pixel height.
  * Smaller modules collapse to 3 ticks (0 / 500 / 1k), wider ones
  * restore the full 100-step ladder. Recharts places ticks using this
- * count across the 0–1000 domain.
+ * count across the [0, 1000] domain, so each returned N produces
+ * (N − 1) equal 1000/N-sized steps that all land on multiples of 100.
  */
 export function pickYTickCount(chartH: number): number {
-  if (chartH < 180) return 3;   // 0 / 600 / 1.2k
-  if (chartH < 260) return 5;   // 0 / 300 / 600 / 900 / 1.2k
-  if (chartH < 340) return 7;   // 0 / 200 / 400 / 600 / 800 / 1k / 1.2k
-  return 13;                    // 0 / 100 / 200 / … / 1.2k
+  if (chartH < 180) return 3;   // 0 / 500 / 1k
+  if (chartH < 260) return 6;   // 0 / 200 / 400 / 600 / 800 / 1k
+  if (chartH < 340) return 6;   // 0 / 200 / 400 / 600 / 800 / 1k
+  return 11;                    // 0 / 100 / 200 / … / 1k  (per Figma)
 }
 
 /**
@@ -339,14 +347,49 @@ export function AudienceGrowthModule({
               tickLine={false}
               axisLine={false}
               tickFormatter={formatYAxis}
-              // Widened from 28 → 32 so "1.2k" at 12 px doesn't clip.
+              // 32 px so "1k" at 12 px doesn't clip.
               width={32}
-              domain={[0, 1200]}
+              // Domain caps at 1000 per Figma 2895:68528 — the top-line
+              // series peaks at exactly 1000 in the new mock data, so
+              // this leaves zero wasted headroom above the curve.
+              domain={[0, 1000]}
               // Height-driven density: few ticks when short, full
-              // ladder when tall. Recharts picks nice round values
-              // across [0, 1000] given a tickCount.
+              // 100-step ladder when tall.  Recharts picks nice round
+              // values across [0, 1000] given a tickCount.
               tickCount={yTickCount}
             />
+            {/* Per-series linear-gradient fills — Figma 2895:68528.
+                Each area fades from its own hue at 20 % opacity
+                right below the curve DOWN to fully transparent at
+                the x-axis baseline.
+                Why gradients + fade-to-transparent instead of the
+                old flat `subtle` fill at 70 % opacity?
+                  • The old flat fills stacked visibly — three
+                    translucent washes multiplying to a darker
+                    "muddy" band anywhere all three areas overlap.
+                  • Fading to transparent at the bottom means the
+                    overlap region carries almost no additional
+                    tint below each curve, so the three bands read
+                    as distinct color-tinted zones rather than one
+                    compound wash.
+                `x1/x2 = 0` + `y1 = 0 / y2 = 1` runs the gradient
+                strictly top-to-bottom in user-space of the
+                <Area> shape's bounding box. */}
+            <defs>
+              {series.map((s) => (
+                <linearGradient
+                  key={s.key}
+                  id={`aud-growth-fill-${network ?? 'default'}-${s.key}`}
+                  x1={0}
+                  y1={0}
+                  x2={0}
+                  y2={1}
+                >
+                  <stop offset="0%" stopColor={s.color} stopOpacity={0.2} />
+                  <stop offset="100%" stopColor={s.color} stopOpacity={0} />
+                </linearGradient>
+              ))}
+            </defs>
             <Tooltip content={<ModuleTooltip />} cursor={{ stroke: '#C4C3C6', strokeDasharray: '3 3' }} />
             {/* Render largest area first so smaller series sit on top. */}
             {series.map((s) => (
@@ -356,9 +399,12 @@ export function AudienceGrowthModule({
                 dataKey={s.key}
                 name={s.label}
                 stroke={s.color}
-                strokeWidth={1.5}
-                fill={s.subtle}
-                fillOpacity={0.7}
+                strokeWidth={2}
+                // Gradient handles alpha, so `fillOpacity` stays at
+                // 1 and lets the gradient's own stop-opacities drive
+                // the final wash intensity.
+                fill={`url(#aud-growth-fill-${network ?? 'default'}-${s.key})`}
+                fillOpacity={1}
                 dot={false}
                 activeDot={{ r: 3, strokeWidth: 0, fill: s.color }}
                 isAnimationActive={false}

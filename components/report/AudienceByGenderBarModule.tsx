@@ -144,16 +144,33 @@ export function AudienceByGenderBarModule({
                 className="block h-[12px] w-[12px] rounded-full flex-shrink-0"
                 style={{ background: entry.fill }}
               />
+              {/* Same split-weight legend as the donut variant
+                  (see AudienceByGenderModule) — regular name +
+                  medium percentage, both `#201E24`. */}
               <span
-                className="text-[#4C4B4F]"
                 style={{
                   fontFamily: 'IBM Plex Sans, sans-serif',
-                  fontSize: 12,
-                  lineHeight: '16px',
-                  letterSpacing: '0.3px',
+                  color: '#201E24',
                 }}
               >
-                {entry.name} - {entry.value}%
+                <span
+                  style={{
+                    fontSize: 12,
+                    lineHeight: '16px',
+                    letterSpacing: '0.3px',
+                  }}
+                >
+                  {entry.name} -{' '}
+                </span>
+                <span
+                  style={{
+                    fontSize: 12,
+                    lineHeight: '18px',
+                    fontWeight: 500,
+                  }}
+                >
+                  {entry.value}%
+                </span>
               </span>
             </div>
           ))}

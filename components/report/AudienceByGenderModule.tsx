@@ -1,23 +1,18 @@
 'use client';
 
 /**
- * Audience by gender — donut. Figma 1232:350200, donut shape with an
- * empty center hole.
+ * Audience by gender — donut. Figma 2486:56994, refresh over the
+ * earlier 1232:350200 comp.  Donut shape with an empty center hole.
  *
- *   • Slice colors share the green / blue / orange palette established
- *     by Audience Growth (Figma 1302:170369), so every chart in the
- *     report reads from the same three primaries:
- *       • Female      → #3FA40D (green)  — biggest slice gets the most
- *                                          "primary" hue
- *       • Male        → #0570DE (blue)   — Male stays blue, matching
- *                                          the convention every other
- *                                          chart's "platform blue" uses
- *       • Unspecified → #ED6704 (orange) — third slice gets the warm
- *                                          accent
- *     The bar variant (rendered via `CategoricalBarModule` from the
- *     `audience-by-gender` entry in `MOCK_CHART_DATA`) reads its colors
- *     from that same data source, so this palette change lands in both
- *     chart types in one place — see `lib/mock-data.ts`.
+ *   • Slice colors share the blue / green / yellow palette locked in
+ *     by Audience Growth (Figma 2895:68528) — same three primaries
+ *     across every chart in the report:
+ *       • Female      → #0570DE (blue, colors/palette/blue/500)     — biggest slice, brand-primary hue
+ *       • Male        → #00C078 (green, SUCCESS/success--shade_10)  — second
+ *       • Unspecified → #E6AE06 (yellow, WARNING/warning--shade_10) — accent for the residual slice
+ *     The bar variant (`AudienceByGenderBarModule`) uses the same
+ *     `getGenderColors` resolver so this palette change lands in
+ *     both chart types in one place.
  *
  * Visualization rules (apply to all pie / distribution charts):
  *   1. No gaps between segments — `stroke="none"` so wedges read as a
@@ -36,32 +31,35 @@ import { MockProfile } from '@/lib/profile-data';
 import { ModuleNetworks } from './ModuleNetworks';
 import { ModuleTooltip } from './ModuleTooltip';
 
-// Cross-network palette — green / blue / orange, shared with the
-// `SERIES_CROSS_NETWORK` ramp in `AudienceGrowthModule.tsx`.
+// Cross-network palette — blue / green / yellow, shared with the
+// `SERIES_CROSS_NETWORK` ramp in `AudienceGrowthModule.tsx` (Figma
+// 2895:68528).  Same three Figma tokens across every distribution
+// chart in the report.
 const GENDER_COLORS_CROSS_NETWORK = {
-  female: '#3FA40D',      // green — biggest slice
-  male: '#0570DE',        // blue  — Male stays blue
-  unspecified: '#ED6704', // orange — warm accent for the residual slice
+  female: '#0570DE',      // blue   — colors/palette/blue/500 (biggest slice)
+  male: '#00C078',        // green  — SUCCESS/success--shade_10
+  unspecified: '#E6AE06', // yellow — WARNING/warning--shade_10 (residual)
 } as const;
 
-// TikTok palette (Figma 2467:42088) — three INFO-blue shades from
-// the same Figma INFO tokens Audience Growth uses on TikTok.
-// Female (the dominant slice) gets the DARKEST shade per the
-// design — visual weight tracks data weight:
-//   • Female      — INFO/info--shade_20  (#005BBA, darkest)
-//   • Male        — INFO/info--shade_10  (#0067D1, medium)
-//   • Unspecified — INFO/info_dark-theme (#1A88FF, lightest)
+// TikTok palette — Figma 2486:56994 unifies TikTok with the
+// cross-network palette (the earlier 2467:42088 all-blue INFO ramp
+// is retired).  Kept as a distinct constant rather than folding
+// into `GENDER_COLORS_CROSS_NETWORK` so `getGenderColors(network)`
+// branching survives for any future TikTok-specific palette
+// without another refactor — same pattern `getSeries` uses in
+// `AudienceGrowthModule.tsx`.
 const GENDER_COLORS_TIKTOK = {
-  female: '#005BBA',
-  male: '#0067D1',
-  unspecified: '#1A88FF',
+  female: '#0570DE',
+  male: '#00C078',
+  unspecified: '#E6AE06',
 } as const;
 
 /**
  * Resolve the gender-slice palette for a given module network.
- * `'tiktok'` swaps to the all-blue INFO ramp; anything else falls
- * back to the cross-network green / blue / orange tokens.  Mirrors
- * the `getSeries(network)` pattern used by `AudienceGrowthModule`.
+ * Currently returns the same blue / green / yellow palette
+ * regardless of network per Figma 2486:56994 (which supersedes the
+ * earlier TikTok-blue variant).  Branch retained so a future
+ * TikTok-specific palette can drop in without another refactor.
  *
  * Exported so the sibling `AudienceByGenderBarModule` can use the
  * same palette resolver — both modules share the same legend row
@@ -147,21 +145,35 @@ export function AudienceByGenderModule({
                 className="block h-[12px] w-[12px] rounded-full"
                 style={{ background: entry.fill }}
               />
-              {/* `Name - 54%` per Figma 2467:42121 — value sits in
-                  the same label so the legend doubles as the
-                  per-slice breakdown.  Was just the name before;
-                  the design now puts the figures here instead of
-                  in a separate row beneath the donut. */}
+              {/* `Name - 54%` per Figma 2486:56994 — name in
+                  regular 12/16 with 0.3 tracking, percentage in
+                  medium 12/18.  Both spans share `#201E24`
+                  (BRAND/dark) so the emphasis comes from weight,
+                  not color.  Was a single-weight span before. */}
               <span
-                className="text-[#4C4B4F]"
                 style={{
                   fontFamily: 'IBM Plex Sans, sans-serif',
-                  fontSize: 12,
-                  lineHeight: '16px',
-                  letterSpacing: '0.3px',
+                  color: '#201E24',
                 }}
               >
-                {entry.name} - {entry.value}%
+                <span
+                  style={{
+                    fontSize: 12,
+                    lineHeight: '16px',
+                    letterSpacing: '0.3px',
+                  }}
+                >
+                  {entry.name} -{' '}
+                </span>
+                <span
+                  style={{
+                    fontSize: 12,
+                    lineHeight: '18px',
+                    fontWeight: 500,
+                  }}
+                >
+                  {entry.value}%
+                </span>
               </span>
             </div>
           ))}

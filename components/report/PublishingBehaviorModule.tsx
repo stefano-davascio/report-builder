@@ -1,7 +1,8 @@
 'use client';
 
 /**
- * Publishing Behaviour — Day × Value bubble grid (Figma 2238:52609).
+ * Publishing Behaviour — Day × Value bubble grid (Figma 2486:54947,
+ * refresh over the earlier 2238:52609 comp).
  *
  * Different from `BubbleChartModule` in three meaningful ways:
  *
@@ -14,8 +15,10 @@
  *     bubble's vertical position encodes a magnitude (e.g. views,
  *     engagement count) instead of a posting hour.
  *   • Bubble COLOR encodes value bands — High / Mid / Low — using
- *     the TikTok-blue 3-shade ramp (#005BBA / #0067D1 / #1A88FF,
- *     per the Figma INFO tokens).
+ *     the 2486 blue-ramp spread (deep navy #003573 / brand
+ *     blue-500 #0570DE / cyan blue-300 #06B9EF).  Broader hue
+ *     spread than the earlier INFO ramp so the tiers stay legible
+ *     at small bubble sizes.
  *   • Bubble SIZE scales CONTINUOUSLY with the value via Recharts'
  *     ZAxis range, so bubble radius tracks magnitude alongside the
  *     band color — bigger AND darker for higher-value posts.
@@ -66,15 +69,22 @@ function formatValue(v: number): string {
 }
 
 // ── Color bands ────────────────────────────────────────────────────────────
-// Three discrete fills mapped to the Figma 2238 INFO blue ramp.
+// Three discrete fills mapped to the Figma 2486:54947 blue ramp.
+// The updated spec spreads the three tiers across a wider hue range
+// than the old INFO ramp so the tiers are legible at a glance:
+//   • High — dark navy       (was #005BBA)
+//   • Mid  — primary blue    (was #0067D1)
+//   • Low  — cyan blue-300   (was #1A88FF)
 // Darkest = High (top third of the value range), lightest = Low
-// (bottom third).  Colors come from Figma variables:
-//   • INFO/info--shade_20 = #005BBA (High)
-//   • INFO/info--shade_10 = #0067D1 (Mid / "Medium")
-//   • INFO/info_dark-theme = #1A88FF (Low)
-const HIGH_COLOR = '#005BBA';
-const MID_COLOR  = '#0067D1';
-const LOW_COLOR  = '#1A88FF';
+// (bottom third).
+//
+// Tokens:
+//   • Deep navy               → `#003573` (blue/900-ish)
+//   • BRAND/primary blue-500  → `#0570DE` (matches Audience growth)
+//   • colors/palette/blue/300 → `#06B9EF` (explicit Figma token)
+const HIGH_COLOR = '#003573';
+const MID_COLOR  = '#0570DE';
+const LOW_COLOR  = '#06B9EF';
 
 type Band = 'high' | 'mid' | 'low';
 

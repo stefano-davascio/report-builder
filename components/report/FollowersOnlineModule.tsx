@@ -28,7 +28,8 @@ import {
 import { BubblePoint } from '@/types';
 import { MockProfile } from '@/lib/profile-data';
 import { ModuleNetworks } from './ModuleNetworks';
-import { ModuleTooltipCard, ModuleTooltipRow } from './ModuleTooltip';
+// `./ModuleTooltip` primitives aren't imported here — the Followers
+// online tooltip is bespoke (Figma 3164:55836); see below.
 import { COMPACT_NETWORKS_THRESHOLD_PX } from './AudienceGrowthModule';
 
 // Mon-first labels with Mon at the TOP (reversed=true on YAxis flips
@@ -63,22 +64,25 @@ function formatHourLong(h: number): string {
 }
 
 // ── Color ramp ─────────────────────────────────────────────────────────────
-// Stripe magenta palette (Figma 1290:101428) — 10 evenly-spaced stops
-// from `magenta/0` (#fff5fa) to `magenta/800` (#68052b). Linear
-// interpolation between adjacent stops keeps the gradient smooth at
-// any value while staying perfectly aligned with the design system
-// tokens at the marked t values.
+// Blue palette (Figma 2899:71022) — 10 stops from `blue/50`
+// (#cff5f6, pale cyan) to `blue/800` (#003262, deep navy).
+// Stops are placed at the EXACT positions surfaced by the Figma
+// legend gradient (denser packing toward the dark end than a
+// uniform 10 %-step ramp) so the visual density of the bubbles
+// matches the design 1:1.  Linear interpolation between adjacent
+// stops keeps the gradient smooth at any value while landing on
+// design tokens at each marked t.
 const COLOR_STOPS: Array<[number, [number, number, number]]> = [
-  [0.000, [255, 245, 250]], // magenta/0   #fff5fa
-  [0.111, [255, 231, 242]], // magenta/50  #ffe7f2
-  [0.222, [255, 204, 223]], // magenta/100 #ffccdf
-  [0.333, [255, 177, 205]], // magenta/200 #ffb1cd
-  [0.444, [254, 135, 161]], // magenta/300 #fe87a1
-  [0.556, [252,  82, 106]], // magenta/400 #fc526a
-  [0.667, [223,  27,  65]], // magenta/500 #df1b41
-  [0.778, [179,   9,  60]], // magenta/600 #b3093c
-  [0.889, [137,  13,  55]], // magenta/700 #890d37
-  [1.000, [104,   5,  43]], // magenta/800 #68052b
+  [0.000, [207, 245, 246]], // blue/50  #cff5f6 — hold until 9.4 %
+  [0.094, [207, 245, 246]], // blue/50  #cff5f6
+  [0.181, [162, 229, 239]], // blue/100 #a2e5ef
+  [0.282, [117, 213, 232]], // blue/200 #75d5e8
+  [0.381, [  6, 185, 239]], // blue/300 #06b9ef
+  [0.506, [  0, 150, 235]], // blue/400 #0096eb
+  [0.598, [  5, 112, 222]], // blue/500 #0570de
+  [0.737, [  0,  85, 188]], // blue/600 #0055bc
+  [0.851, [  4,  67, 140]], // blue/700 #04438c
+  [1.000, [  0,  50,  98]], // blue/800 #003262
 ];
 
 function lerp(a: number, b: number, t: number): number {
@@ -106,9 +110,41 @@ const LEGEND_GRADIENT_CSS = `linear-gradient(to right, ${
 })`;
 
 // ── Tooltip ────────────────────────────────────────────────────────────────
+// Figma 3164:55836 — a bespoke single-row card
+// `[dot] Fri - 18:00        120`.  Distinct from the shared
+// `ModuleTooltipCard` chrome because:
+//   • no title row above the values — the day-hour label lives
+//     inline with the dot on the left, value pins to the right
+//     via `justify-between`
+//   • the dot is a fixed brand-blue (colors/palette/blue/500,
+//     #0570DE) rather than the per-cell ramp color — the design
+//     wanted a single accent color, not the per-value hue
+//   • hour format is 24-hour (`18:00`) not 12-hour (`6 PM`)
+//   • drop-shadow, padding, and dot size come from the Figma
+//     "Is Floating" surface tokens directly
 
 interface FollowersTooltipPayload {
   payload?: BubblePoint & { t: number };
+}
+
+// Fixed dot color per Figma 3164:55836 — brand blue-500.  Doesn't
+// track the per-cell ramp; the design wanted one accent color for
+// the tooltip regardless of the underlying value's ramp hue.
+const TOOLTIP_DOT_COLOR = '#0570DE';
+
+// "Is Floating" drop-shadow token from the Figma design's
+// tooltip surface — two stacked shadows for a soft floating feel.
+const TOOLTIP_SHADOW =
+  '0 4px 8px rgba(32,30,36,0.1), 0 8px 16px rgba(32,30,36,0.1)';
+
+/**
+ * Format an hour (0-23) as a 24-hour clock label like `18:00`
+ * per the Figma tooltip label.  Distinct from `formatHourLong`
+ * (which renders `6 PM` for the x-axis ticks) — the tooltip needs
+ * the fuller, zero-padded 24-hour form.
+ */
+function formatHour24(h: number): string {
+  return `${String(h).padStart(2, '0')}:00`;
 }
 
 function FollowersTooltip({ active, payload }: {
@@ -120,12 +156,45 @@ function FollowersTooltip({ active, payload }: {
   if (!p) return null;
   const dayLabel = DAY_LABELS_MON_FIRST[dayToRow(p.day)];
   return (
-    <ModuleTooltipCard title={`${dayLabel} · ${formatHourLong(p.hour)}`}>
-      <ModuleTooltipRow
-        dot={colorRamp(p.t)}
-        value={p.value.toLocaleString()}
-      />
-    </ModuleTooltipCard>
+    <div
+      className="bg-white rounded-[6px] flex items-center justify-between gap-3"
+      style={{
+        border: '1px solid #E8E8E9',
+        boxShadow: TOOLTIP_SHADOW,
+        padding: '8px 12px',
+        fontFamily: 'IBM Plex Sans, sans-serif',
+      }}
+    >
+      <div className="flex items-center" style={{ gap: 6 }}>
+        <span
+          aria-hidden="true"
+          className="flex-shrink-0 rounded-full"
+          style={{ width: 10, height: 10, background: TOOLTIP_DOT_COLOR }}
+        />
+        <span
+          className="whitespace-nowrap"
+          style={{
+            color: '#626165',
+            fontSize: 12,
+            lineHeight: '18px',
+            fontWeight: 400,
+          }}
+        >
+          {dayLabel} - {formatHour24(p.hour)}
+        </span>
+      </div>
+      <span
+        className="whitespace-nowrap"
+        style={{
+          color: '#201E24',
+          fontSize: 12,
+          lineHeight: '18px',
+          fontWeight: 500,
+        }}
+      >
+        {p.value.toLocaleString()}
+      </span>
+    </div>
   );
 }
 
