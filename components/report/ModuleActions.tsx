@@ -135,8 +135,12 @@ const PILL_CLASSES =
 //     used elsewhere to this near-black-at-5 % wash so the hover
 //     reads as subtle ink on the white pill instead of swapping
 //     the bg to the grey of the canvas behind it.
+// No `[&_path]:[stroke-width:1.25]` override — icons render at the
+// library default 1.5.  The override rendered as ~1 device px on
+// non-retina laptops, which looked faded / semi-transparent; 1.5
+// stays crisp across DPRs.
 const TOOLBAR_BTN_BASE =
-  'flex items-center justify-center w-7 h-7 p-[6px] rounded-[4px] transition-colors [&_path]:[stroke-width:1.25]';
+  'flex items-center justify-center w-7 h-7 p-[6px] rounded-[4px] transition-colors';
 const TOOLBAR_BTN_HOVER = 'hover:bg-[rgba(32,30,36,0.05)]';
 
 /**

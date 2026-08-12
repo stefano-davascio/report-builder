@@ -506,7 +506,6 @@ function Toolbar({
           <IconText
             size={16}
             color="#201E24"
-            className="[&_path]:[stroke-width:1.33]"
           />
           <IconChevronDown size={12} color="#201E24" />
         </button>
@@ -599,7 +598,6 @@ function Toolbar({
         <IconLink
           size={16}
           color="#201E24"
-          className="[&_path]:[stroke-width:1.33]"
         />
       </ToolbarIconButton>
       {linkContext && (

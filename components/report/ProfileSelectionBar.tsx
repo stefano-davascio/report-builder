@@ -161,7 +161,7 @@ function StatusBadge({ status }: { status: NonNullable<ProfileStatus> }) {
       className="flex items-center justify-end gap-[4px] p-[4px] rounded-[4px] h-[20px] overflow-clip flex-shrink-0"
       style={{ backgroundColor: config.bg }}
     >
-      <span className="flex items-center justify-center flex-shrink-0 [&_path]:[stroke-width:1]">
+      <span className="flex items-center justify-center flex-shrink-0">
         <Icon size={14} color={config.color} />
       </span>
       <span
@@ -328,10 +328,6 @@ function OverflowChip({
                 <IconWarning
                   size={14}
                   color="#CE091C"
-                  // Native asset has no stroke-width attribute (defaults
-                  // to 1).  Library default 1.5 reads heavy; 1 matches
-                  // the Figma render exactly.
-                  className="[&_path]:[stroke-width:1]"
                 />
               </span>
             </WarningTooltip>
@@ -347,12 +343,14 @@ function OverflowChip({
             aria-label="Clear all overflowed profiles"
             className="flex items-center justify-center w-[24px] h-[24px] rounded-[4px] hover:bg-[rgba(32,30,36,0.05)] transition-colors cursor-pointer flex-shrink-0"
           >
+            {/* Library default stroke-width (1.5).  Was 0.98 to
+                match Figma's chip-X native stroke, but sub-1-px
+                strokes with `non-scaling-stroke` render at 1 device
+                px on DPR=1 displays and disappear into the
+                background. */}
             <IconClose
               size={16}
               color="#201E24"
-              // Native chip-X stroke is 0.98 — the same override
-              // used on the filter chips' X (Figma 1689:76876).
-              className="[&_path]:[stroke-width:0.98]"
             />
           </button>
         )}
@@ -408,7 +406,6 @@ function OverflowChip({
                       <IconWarning
                         size={14}
                         color="#CE091C"
-                        className="[&_path]:[stroke-width:1]"
                       />
                     </span>
                   </WarningTooltip>
@@ -423,7 +420,6 @@ function OverflowChip({
                     <IconClose
                       size={16}
                       color="#201E24"
-                      className="[&_path]:[stroke-width:0.98]"
                     />
                   </button>
                 )}

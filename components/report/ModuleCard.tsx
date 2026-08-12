@@ -765,10 +765,12 @@ function ModuleCardImpl({
             `DARK/dark--tint_30 (#626165)` per the Figma variable
             binding (NOT the title's #363439 — the icon reads softer
             than the label so it doesn't compete with the metric
-            title).  Native asset ships with NO stroke-width
-            attribute, i.e. the SVG default of 1.  Library default
-            is 1.5 + non-scaling-stroke, which renders too heavy at
-            16-px tile, so override to 1 to match Figma. */}
+            title).  Renders at the library default stroke-width of
+            1.5.  Was overridden to 1 to match Figma, but 1 CSS-px
+            with `non-scaling-stroke` = 1 device px on DPR=1
+            displays which anti-aliased to a barely-visible line;
+            1.5 renders consistently across both retina and
+            non-retina screens. */}
         <button
           type="button"
           className="flex-shrink-0 flex items-center justify-center"
@@ -777,7 +779,6 @@ function ModuleCardImpl({
           <IconInfo
             size={16}
             color="#626165"
-            className="[&_path]:[stroke-width:1]"
           />
         </button>
         {warningSeverity !== null && (

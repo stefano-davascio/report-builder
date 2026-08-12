@@ -103,9 +103,6 @@ export function ModuleWarningIcon({ severity, profiles }: ModuleWarningIconProps
         className={cn(
           'inline-flex items-center justify-center w-[20px] h-[20px] p-[3px] rounded-[4px]',
           'bg-[#FCE7E9] flex-shrink-0',
-          // Inherits FigmaIcon's stroke handling — width override
-          // matches existing in-card pill icons.
-          '[&_path]:[stroke-width:1]',
         )}
       >
         <IconWarning size={14} color="#CE091C" />

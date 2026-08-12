@@ -355,7 +355,6 @@ export function ReportsTable({
                     <IconPlusCircle
                       size={16}
                       color="#201E24"
-                      className="[&_path]:[stroke-width:1.25]"
                     />
                     <span>Filter</span>
                   </span>
@@ -745,10 +744,10 @@ function ChipRemoveButton({ onRemove }: { onRemove: () => void }) {
       <IconClose
         size={16}
         color="#201E24"
-        // Library default 1.5 with `non-scaling-stroke` renders heavier
-        // than Figma's chip-X glyph. The native asset (Figma
-        // 1674:45033) ships at 0.98 stroke — preserve that exactly.
-        className="[&_path]:[stroke-width:0.98]"
+        // Library default stroke-width (1.5).  Was 0.98 to preserve
+        // Figma's chip-X native stroke, but 0.98 CSS px with
+        // `non-scaling-stroke` reads as ~1 device px on DPR=1
+        // displays and disappears; 1.5 stays crisp across DPRs.
       />
     </button>
   );

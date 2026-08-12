@@ -155,7 +155,7 @@ export function ProfileChip({ profile, isEditing, onRemove }: ProfileChipProps) 
               <span
                 aria-label={styles.label}
                 role="img"
-                className="flex items-center justify-center w-[24px] h-[24px] rounded-[60px] flex-shrink-0 [&_path]:[stroke-width:1]"
+                className="flex items-center justify-center w-[24px] h-[24px] rounded-[60px] flex-shrink-0"
               />
             }
           >

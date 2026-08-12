@@ -220,11 +220,11 @@ export function ReportHeader({
                 {title}
               </span>
               {/* Pencil rename affordance — Figma 283:2740 wrapper,
-                  14-px `rename` glyph (IconPencil). Stroke override
-                  `[&_path]:[stroke-width:1.33]` — Figma renders this
-                  glyph at ~1.33 px stroke at 14-tile.  The lib
-                  default of 1.5 would also be acceptable here but a
-                  touch heavier than spec. */}
+                  14-px `rename` glyph (IconPencil).  Renders at
+                  library default stroke-width (1.5).  Was 1.33 to
+                  match Figma's exact spec, but sub-1.5 strokes
+                  with `non-scaling-stroke` render faded on DPR=1
+                  displays. */}
               <button
                 onClick={(e) => { e.stopPropagation(); setTitleDraft(title); setEditingTitle(true); }}
                 className="w-6 h-6 flex items-center justify-center flex-shrink-0 cursor-pointer"
@@ -233,7 +233,6 @@ export function ReportHeader({
                 <IconPencil
                   size={14}
                   color="#201E24"
-                  className="[&_path]:[stroke-width:1.33]"
                 />
               </button>
             </>

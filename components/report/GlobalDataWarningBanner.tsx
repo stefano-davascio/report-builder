@@ -75,7 +75,7 @@ export function GlobalDataWarningBanner({
             weight. */}
         <span
           aria-hidden
-          className="flex items-center justify-center flex-shrink-0 [&_path]:[stroke-width:1]"
+          className="flex items-center justify-center flex-shrink-0"
         >
           <IconWarning size={14} color="#CE091C" />
         </span>
