@@ -684,7 +684,7 @@ function ModuleCardImpl({
     <div
       ref={cardRef}
       className={cn(
-        'relative bg-white rounded-[8px] border h-full flex flex-col overflow-hidden p-[20px] transition-[border-color,box-shadow] duration-150',
+        '@container relative bg-white rounded-[8px] border h-full flex flex-col overflow-hidden p-[20px] transition-[border-color,box-shadow] duration-150',
         showEditChrome
           ? 'border-[#4D36FF] shadow-[0px_4px_8px_0px_rgba(32,30,36,0.1),0px_8px_16px_0px_rgba(32,30,36,0.1)]'
           : 'border-[#E8E8E9]',
