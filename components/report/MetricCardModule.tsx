@@ -127,7 +127,7 @@ export function MetricCardModule({
   // Shared inner atoms — kept as locals so the two layout branches below
   // share one source of truth (same fonts, same colors, same gaps).
   const valueEl = (
-    <span className="text-[24px] @min-[475px]:text-[48px] leading-[30px] font-medium tracking-[-0.6px] text-[#363439] whitespace-nowrap">
+    <span className="text-[24px] @min-[200px]:text-[48px] leading-[30px] font-medium tracking-[-0.6px] text-[#363439] whitespace-nowrap">
       {metric.value}
     </span>
   );
