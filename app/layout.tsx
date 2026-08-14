@@ -1,12 +1,17 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
-const ibmPlexSans = IBM_Plex_Sans({
+// Self-hosted instead of next/font/google: Next 16.2.4's bundled Google
+// Fonts metadata points at a gstatic.com URL that 404s (Google rotated the
+// file), which breaks builds on any machine without a stale local cache.
+// IBM Plex Sans latin ships as one variable file covering weights 300-700.
+const ibmPlexSans = localFont({
+  src: "./fonts/ibm-plex-sans-latin.woff2",
   variable: "--font-ibm-plex-sans",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  weight: "300 700",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
