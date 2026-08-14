@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
   // (CJS-yes / pure-ESM-no), (b) where the dev server was launched
   // from, or (c) what stray lockfiles happen to exist outside the repo.
   turbopack: {
-    root: "/Users/emmanuel/report-builder",
+    root: import.meta.dirname,
   },
 
   // ─── Barrel-import optimization ────────────────────────────────────────
