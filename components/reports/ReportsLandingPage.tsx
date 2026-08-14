@@ -96,7 +96,8 @@ export function ReportsLandingPage({
       // scrollbar doesn't hug the viewport edge.  Mirrors the
       // canvas treatment in `ReportBuilderPage`.  See that file
       // for the `scrollbar-gutter: stable` rationale.
-      className="h-full overflow-y-auto canvas-scrollbar bg-white mr-2 pr-[16px]"
+      // classnames removed my stef " canvas-scrollbar bg-white mr-2 pr-[16px]"
+      className="h-full overflow-y-auto"
       style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}
     >
       {/* TopAppBar pinned to the scroll container's top — Figma
